@@ -7,3 +7,10 @@ it may also house a Firestore connector, or even a MemoryStore one.
 This is the continuation of the Datastore connector from the [Djangae project](https://github.com/potatolondon/djangae)
 but converted to use the Cloud Datastore API on Python 3.
 
+
+# Running the tests
+
+```
+$ pip3 install --user tox
+$ tox
+```
