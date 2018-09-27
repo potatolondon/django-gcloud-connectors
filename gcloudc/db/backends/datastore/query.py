@@ -1,15 +1,32 @@
-import django
+import datetime
 import json
 import logging
 import re
-import datetime
+from itertools import chain
 
-from itertools import chain, imap
-from django.db.models.sql.datastructures import EmptyResultSet
-
-from django.db import connections
+import django
+from django.db import (
+    NotSupportedError,
+    connections,
+)
 from django.db.models import AutoField
+from django.db.models.sql.datastructures import EmptyResultSet
 from django.utils import six
+
+from . import (
+    POLYMODEL_CLASS_ATTRIBUTE,
+    rpc,
+)
+from .indexing import (
+    add_special_index,
+    get_indexer,
+)
+from .utils import (
+    ensure_datetime,
+    get_field_from_column,
+    get_top_concrete_parent,
+    has_concrete_parents,
+)
 
 try:
     from django.db.models.query import FlatValuesListIterable
@@ -24,22 +41,6 @@ except ImportError:
     # Django >= 1.9
     class ValuesListQuerySet(object):
         pass
-
-from django.db import NotSupportedError
-from djangae.db.backends.appengine.indexing import (
-    get_indexer,
-    add_special_index,
-)
-
-from djangae.db.backends.appengine import POLYMODEL_CLASS_ATTRIBUTE
-from djangae.db.utils import (
-    get_top_concrete_parent,
-    has_concrete_parents,
-    get_field_from_column,
-    ensure_datetime,
-)
-
-from google.appengine.api import datastore
 
 
 logger = logging.getLogger(__name__)
@@ -112,14 +113,18 @@ class WhereNode(object):
     def append_child(self, node):
         self.children.append(node)
 
-    def set_leaf(self, column, operator, value, is_pk_field, negated, lookup_name, namespace, target_field=None):
+    def set_leaf(
+            self, column, operator, value, is_pk_field, negated, lookup_name, namespace,
+            target_field=None):
+
         assert column
         assert operator
         assert isinstance(is_pk_field, bool)
         assert isinstance(negated, bool)
 
         if operator == "iexact" and isinstance(target_field, AutoField):
-            # When new instance is created, automatic primary key 'id' does not generate '_idx_iexact_id'.
+            # When new instance is created, automatic primary key 'id'
+            # does not generate '_idx_iexact_id'.
             # As the primary key 'id' (AutoField) is integer and is always case insensitive,
             # we can deal with 'id_iexact=' query by using 'exact' rather than 'iexact'.
             operator = "exact"
@@ -134,7 +139,7 @@ class WhereNode(object):
 
             if isinstance(value, (list, tuple)):
                 value = [
-                    datastore.Key.from_path(table, x, namespace=namespace)
+                    rpc.Key.from_path(table, x, namespace=namespace)
                     for x in value if x
                 ]
             else:
@@ -152,10 +157,10 @@ class WhereNode(object):
                     else:
                         value = "\0"
 
-                    value = datastore.Key.from_path(table, value, namespace=namespace)
+                    value = rpc.Key.from_path(table, value, namespace=namespace)
                     operator = "gte"
                 else:
-                    value = datastore.Key.from_path(table, value, namespace=namespace)
+                    value = rpc.Key.from_path(table, value, namespace=namespace)
             column = "__key__"
 
         # Do any special index conversions necessary to perform this lookup
@@ -183,7 +188,7 @@ class WhereNode(object):
         self.lookup_name = lookup_name
 
     def __iter__(self):
-        for child in chain(*imap(iter, self.children)):
+        for child in chain(*map(iter, self.children)):
             yield child
         yield self
 
@@ -569,7 +574,7 @@ class Query(object):
 
             if len(inequality_fields) > 1:
                 raise NotSupportedError(
-                    "You can only have one inequality filter per query on the datastore. "
+                    "You can only have one inequality filter per query on the rpc. "
                     "Filters were: %s" % ' '.join(inequality_fields)
                 )
 
@@ -665,9 +670,10 @@ class Query(object):
 
                 if node.children:
                     for lookup in node.children:
-                        query[''.join([lookup.column, lookup.operator])] = six.text_type("NULL" if lookup.value is None else lookup.value)
+
+                        query[''.join([lookup.column, lookup.operator])] = _serialize_sql_value(lookup.value)
                 else:
-                    query[''.join([node.column, node.operator])] = six.text_type("NULL" if node.value is None else node.value)
+                    query[''.join([node.column, node.operator])] = _serialize_sql_value(node.value)
 
                 where.append(query)
 
@@ -677,12 +683,17 @@ class Query(object):
 
 
 INVALID_ORDERING_FIELD_MESSAGE = (
-    "Ordering on TextField or BinaryField is not supported on the datastore. "
+    "Ordering on TextField or BinaryField is not supported on the rpc. "
     "You might consider using a ComputedCharField which stores the first "
     "_MAX_STRING_LENGTH (from google.appengine.api.datastore_types) bytes of the "
     "field and instead order on that."
 )
 
+def _serialize_sql_value(value):
+    if isinstance(value, six.integer_types):
+        return value
+    else:
+        return six.text_type("NULL" if value is None else value)
 
 def _get_parser(query, connection=None):
     version = django.VERSION[:2]

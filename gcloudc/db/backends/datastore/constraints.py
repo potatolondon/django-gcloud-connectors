@@ -3,12 +3,15 @@ import datetime
 from django.conf import settings
 from django.core.exceptions import NON_FIELD_ERRORS
 from django.utils.six import iteritems
-
+from gcloudc.db import transaction
 from google.cloud.datastore.key import Key
 
+from .dbapi import (
+    IntegrityError,
+    NotSupportedError,
+)
 from .unique_utils import unique_identifiers_from_entity
 from .utils import key_exists
-from .dbapi import IntegrityError, NotSupportedError
 
 
 def has_active_unique_constraints(model_or_instance):
@@ -74,7 +77,7 @@ class UniqueMarker(EntityModel):
         return "_djangae_unique_marker"
 
 
-@db.transactional(propagation=TransactionOptions.INDEPENDENT, xg=True)
+@transaction.atomic(xg=True)
 def acquire_identifiers(identifiers, entity_key):
     return _acquire_identifiers(identifiers, entity_key)
 
@@ -200,7 +203,7 @@ def release(model, entity):
     release_identifiers(identifiers, namespace=namespace)
 
 
-@db.transactional(propagation=TransactionOptions.INDEPENDENT, xg=True)
+@transaction.atomic(xg=True)
 def update_identifiers(to_acquire, to_release, key):
     """ A combination of acquire_identifiers and release_identifiers in a combined transaction. """
     _acquire_identifiers(to_acquire, key)

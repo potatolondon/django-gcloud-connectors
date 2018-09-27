@@ -5,23 +5,41 @@ import logging
 import warnings
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.client import BaseDatabaseClient
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.backends.base.features import BaseDatabaseFeatures
-from django.db.backends.base.introspection import (BaseDatabaseIntrospection,
-                                                   TableInfo)
+from django.db.backends.base.introspection import (
+    BaseDatabaseIntrospection,
+    TableInfo,
+)
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.base.validation import BaseDatabaseValidation
-from django.utils import six, timezone
-from google.cloud import datastore
+from django.utils import (
+    six,
+    timezone,
+)
+from django.utils.encoding import smart_text
+from gcloudc.db import transaction
 
 from . import dbapi as Database
-from .commands import (DeleteCommand, FlushCommand, InsertCommand,
-                       SelectCommand, UpdateCommand, coerce_unicode)
+from . import rpc
+from .commands import (
+    DeleteCommand,
+    FlushCommand,
+    InsertCommand,
+    SelectCommand,
+    UpdateCommand,
+    coerce_unicode,
+)
 from .indexing import load_special_indexes
-from .utils import decimal_to_string, get_datastore_key, make_timezone_naive
+from .utils import (
+    decimal_to_string,
+    get_datastore_key,
+    make_timezone_naive,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +47,11 @@ logger = logging.getLogger(__name__)
 class Connection(object):
     """ Dummy connection class """
     def __init__(self, wrapper, params):
-        self.client = datastore.Client()
         self.creation = wrapper.creation
         self.ops = wrapper.ops
-        self.params = params
         self.queries = []
+        import ipdb; ipdb.set_trace()
+        self.settings_dict = params
 
     def rollback(self):
         pass
@@ -70,7 +88,9 @@ class Cursor(object):
             self.connection.queries.append(sql)
             self.returned_ids = sql.execute()
         else:
-            raise Database.CouldBeSupportedError("Can't execute traditional SQL: '%s' (although perhaps we could make GQL work)", sql)
+            raise Database.CouldBeSupportedError(
+                "Can't execute traditional SQL: '%s' (although perhaps we could make GQL work)", sql
+            )
 
     def next(self):
         row = self.fetchone()
@@ -146,7 +166,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         # Bulk insertions really need to be limited to 25 elsewhere (so that they can be done)
         # transactionally, so setting to 30 doesn't matter but for cascade deletions
         # (which explode to thing_id__in=[]) we need to limit to MAX_ALLOWABLE_QUERIES
-        return datastore.MAX_ALLOWABLE_QUERIES
+        return rpc.MAX_ALLOWABLE_QUERIES
 
     def quote_name(self, name):
         return name
@@ -285,7 +305,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             return self.prep_lookup_time(model, value, field)
         elif db_type in ('list', 'set'):
             if hasattr(value, "__len__") and not value:
-                value = None #Convert empty lists to None
+                value = None  # Convert empty lists to None
             elif hasattr(value, "__iter__"):
                 # Convert sets to lists
                 value = list(value)
@@ -317,7 +337,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             value = self.adapt_decimalfield_value(value, field.max_digits, field.decimal_places)
         elif db_type in ('list', 'set'):
             if hasattr(value, "__len__") and not value:
-                value = None #Convert empty lists to None
+                value = None  # Convert empty lists to None
             elif hasattr(value, "__iter__"):
                 # Convert sets to lists
                 value = list(value)
@@ -334,7 +354,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             in your SQL. Technically this is a bug in Django for assuming that sql is ASCII but
             it's only our backend that will ever trigger the problem
         """
-        return u"QUERY = {}".format(sql)
+        return u"QUERY = {}".format(smart_text(sql))
 
     def fetch_returned_insert_id(self, cursor):
         return cursor.lastrowid
@@ -467,10 +487,10 @@ class DatabaseCreation(BaseDatabaseCreation):
 
 
 class DatabaseIntrospection(BaseDatabaseIntrospection):
-    @datastore.NonTransactional
+    @transaction.non_atomic
     def get_table_list(self, cursor):
         namespace = self.connection.settings_dict.get("NAMESPACE")
-        kinds = [kind.key().id_or_name() for kind in datastore.Query('__kind__', namespace=namespace).Run()]
+        kinds = [kind.key().id_or_name() for kind in rpc.Query('__kind__', namespace=namespace).Run()]
         return [TableInfo(x, "t") for x in kinds]
 
 
@@ -503,7 +523,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
 
 class DatabaseFeatures(BaseDatabaseFeatures):
     empty_fetchmany_value = []
-    supports_transactions = False  #FIXME: Make this True!
+    supports_transactions = False  # FIXME: Make this True!
     can_return_id_from_insert = True
     supports_select_related = False
     autocommits_when_autocommit_is_off = True
@@ -513,7 +533,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
 
 class DatabaseWrapper(BaseDatabaseWrapper):
 
-    data_types = DatabaseCreation.data_types # These moved in 1.8
+    data_types = DatabaseCreation.data_types  # These moved in 1.8
 
     operators = {
         'exact': '= %s',
@@ -563,11 +583,16 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         return True
 
     def get_connection_params(self):
-        return {}
+        if not self.settings_dict.get("INDEXES_FILE"):
+            raise ImproperlyConfigured(
+                "You must specify an INDEXES_FILE in the DATABASES setting"
+            )
+
+        return self.settings_dict.copy()
 
     def get_new_connection(self, params):
         conn = Connection(self, params)
-        load_special_indexes()  # make sure special indexes are loaded
+        load_special_indexes(conn)  # make sure special indexes are loaded
         return conn
 
     def init_connection_state(self):

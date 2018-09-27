@@ -2,6 +2,7 @@ import copy
 import sys
 
 from django.conf import settings
+from . import rpc
 
 
 def key_or_entity_compare(lhs, rhs):
@@ -129,13 +130,13 @@ class CacheDict(object):
             of the cached value
         """
 
-        value = copy.deepcopy(value) # Copy once
+        value = copy.deepcopy(value)  # Copy once
         for k in set(keys):
             # Set the same value for multiple keys
             self._set(k, value)
 
     def __getitem__(self, k):
-        v = self._entries[k] # Find the entry
+        v = self._entries[k]  # Find the entry
 
         # Move the value up the value priority (remove the id() and add it back at the front)
         priority_key = id(v)
@@ -246,7 +247,7 @@ class ContextCache(object):
         self.stack = ContextStack()
 
     def reset(self, keep_disabled_flags=False):
-        if datastore.IsInTransaction():
+        if rpc.IsInTransaction():
             raise RuntimeError(
                 "Clearing the context cache inside a transaction breaks everything, "
                 "we can't let you do that"
@@ -277,10 +278,11 @@ class Context(object):
         self.cache.set_multi(identifiers, entity)
 
     def remove_entity(self, entity_or_key):
-        if not isinstance(entity_or_key, datastore.Key):
+        if not isinstance(entity_or_key, rpc.Key):
             entity_or_key = entity_or_key.key()
 
-        for identifier in self.cache.get_reversed(entity_or_key, compare_func=key_or_entity_compare):
+        for identifier in self.cache.get_reversed(
+                entity_or_key, compare_func=key_or_entity_compare):
             del self.cache[identifier]
 
     def get_entity(self, identifier):
@@ -306,7 +308,7 @@ class ContextStack(object):
 
     def push(self):
         self.stack.append(
-            Context(self) # Empty context
+            Context(self)  # Empty context
         )
 
     def pop(self, apply_staged=False, clear_staged=False, discard=False):
@@ -324,7 +326,6 @@ class ContextStack(object):
         """
         from . import caching
 
-
         if not discard:
             self.staged.insert(0, self.stack.pop())
         else:
@@ -335,7 +336,8 @@ class ContextStack(object):
                 to_apply = self.staged.pop()
                 keys = [x.key() for x in to_apply.cache.values()]
                 if keys:
-                    # This assumes that all keys are in the same namespace, which is almost definitely
+                    # This assumes that all keys are in the same namespace,
+                    # which is almost definitely
                     # going to be the case, but it feels a bit dirty
                     namespace = keys[0].namespace() or None
                     caching.remove_entities_from_cache_by_key(

@@ -1,11 +1,11 @@
 import copy
-from itertools import  product
+from itertools import product
 
 from django.conf import settings
-from django.db.models.sql.datastructures import EmptyResultSet
-from djangae.db.backends.appengine.query import WhereNode
 from django.db import NotSupportedError
+from django.db.models.sql.datastructures import EmptyResultSet
 
+from .query import WhereNode
 
 # Maximum number of subqueries in a multiquery
 DEFAULT_MAX_ALLOWABLE_QUERIES = 100

@@ -1,27 +1,22 @@
-import django
-import logging
-import yaml
-import os
 import datetime
+import logging
+import os
 import re
+import sys
 from itertools import chain
 
-from django.core.exceptions import ValidationError
-from django.db import models
+import yaml
+
+import django
 from django.apps import apps
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db import models
 from django.utils import six
+from google.cloud.datastore.entity import Entity
+from google.cloud.datastore.query import Query
 
-from djangae import environment
-from djangae.db.utils import get_top_concrete_parent
-from djangae.core.validators import MaxBytesValidator
-from djangae.sandbox import allow_mode_write
-
-from google.appengine.api.datastore import (
-    Entity,
-    Delete,
-    Query
-)
+from .utils import get_top_concrete_parent
 
 logger = logging.getLogger(__name__)
 _project_special_indexes = {}
@@ -35,8 +30,8 @@ CHARACTERS_PER_COLUMN = [31, 44, 54, 63, 71, 79, 85, 91, 97, 103]
 STRIP_PERCENTS = django.VERSION < (1, 10)
 
 
-def _get_project_index_file():
-    project_index_file = os.path.join(environment.get_application_root(), "djangaeidx.yaml")
+def _get_project_index_file(connection):
+    project_index_file = os.path.join(connection.settings_dict["INDEXES_FILE"])
     return project_index_file
 
 
@@ -88,13 +83,15 @@ def _merged_indexes():
     return result
 
 
-def load_special_indexes():
+def load_special_indexes(connection):
     global _project_special_indexes
     global _app_special_indexes
     global _last_loaded_times
     global _indexes_loaded
 
-    if _indexes_loaded and environment.is_production_environment():
+    RUNNING_DEVSERVER = (len(sys.argv) > 1 and sys.argv[1] == 'runserver')
+
+    if _indexes_loaded and not RUNNING_DEVSERVER:
         # Index files can't change if we're on production, so once they're loaded we don't need
         # to check their modified times and reload them
         return
@@ -105,7 +102,7 @@ def load_special_indexes():
             data = yaml.load(stream)
         return data
 
-    project_index_file = _get_project_index_file()
+    project_index_file = _get_project_index_file(connection)
     app_files = _get_app_index_files()
 
     files_to_reload = {}
@@ -173,12 +170,11 @@ def write_special_indexes():
     """
     project_index_file = _get_project_index_file()
 
-    with allow_mode_write():
-        with open(project_index_file, "w") as stream:
-            stream.write(yaml.dump(_project_special_indexes))
+    with open(project_index_file, "w") as stream:
+        stream.write(yaml.dump(_project_special_indexes))
 
 
-def add_special_index(model_class, field_name, indexer, operator, value=None):
+def add_special_index(connection, model_class, field_name, indexer, operator, value=None):
     from djangae.utils import in_testing
     from django.conf import settings
 
@@ -186,7 +182,7 @@ def add_special_index(model_class, field_name, indexer, operator, value=None):
 
     field_name = field_name.encode("utf-8")  # Make sure we are working with strings
 
-    load_special_indexes()
+    load_special_indexes(connection)
 
     if special_index_exists(model_class, field_name, index_type):
         return
@@ -987,4 +983,3 @@ register_indexer(StartsWithIndexer)
 register_indexer(IStartsWithIndexer)
 register_indexer(RegexIndexer)
 register_indexer(IRegexIndexer)
-

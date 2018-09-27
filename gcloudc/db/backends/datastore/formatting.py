@@ -36,12 +36,11 @@ def _generate_values_expression(instances, columns):
         for column in columns:
             # FIXME: should this use get_default as a default?
             value = getattr(instance, column, None)
-            needs_quoting = isinstance(value, six.string_types)
 
             try:
-                text_value = '"{}"'.format(value) if needs_quoting else six.text_type(value)
+                text_value = _quote_string(value)
             except UnicodeDecodeError:
-                text_value = '"<binary>"'
+                text_value = "'<binary>'"
 
             row.append(text_value)
 
@@ -64,11 +63,15 @@ def _generate_insert_sql(command):
 def _generate_where_expression(representation):
     where = []
     for branch in representation["where"]:
-        branch = "(" + " AND ".join(["%s%s" % (k, v) for k, v in branch.items()]) + ")"
+        branch = "(" + " AND ".join(["%s%s" % (k, _quote_string(v)) for k, v in branch.items()]) + ")"
         where.append(branch)
 
     return " OR ".join(where)
 
+def _quote_string(value):
+    needs_quoting = isinstance(value, six.string_types)
+    # in ANSI SQL as well as GQL, string literals are wrapped in single quotes
+    return "'{}'".format(value) if needs_quoting else six.text_type(value)
 
 def _generate_select_sql(command, representation):
     has_offset = representation["low_mark"] > 0
