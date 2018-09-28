@@ -22,10 +22,13 @@ from django.utils import (
     timezone,
 )
 from django.utils.encoding import smart_text
-from gcloudc.db import transaction
+from google.cloud import datastore
 
 from . import dbapi as Database
-from . import rpc
+from . import (
+    rpc,
+    transaction,
+)
 from .commands import (
     DeleteCommand,
     FlushCommand,
@@ -50,8 +53,11 @@ class Connection(object):
         self.creation = wrapper.creation
         self.ops = wrapper.ops
         self.queries = []
-        import ipdb; ipdb.set_trace()
         self.settings_dict = params
+
+        self.gclient = datastore.Client(
+            namespace=params.get("NAMESPACE", "")
+        )
 
     def rollback(self):
         pass
@@ -487,10 +493,10 @@ class DatabaseCreation(BaseDatabaseCreation):
 
 
 class DatabaseIntrospection(BaseDatabaseIntrospection):
-    @transaction.non_atomic
     def get_table_list(self, cursor):
-        namespace = self.connection.settings_dict.get("NAMESPACE")
-        kinds = [kind.key().id_or_name() for kind in rpc.Query('__kind__', namespace=namespace).Run()]
+        query = self.connection.gclient.query(kind='__kind__')
+        query.keys_only()
+        kinds = [entity.key.id_or_name for entity in query.fetch()]
         return [TableInfo(x, "t") for x in kinds]
 
 

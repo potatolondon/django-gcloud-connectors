@@ -13,7 +13,6 @@ from django.utils.encoding import (
     force_str,
     python_2_unicode_compatible,
 )
-from gcloudc.db import transaction
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
@@ -23,6 +22,7 @@ from . import (
     constraints,
     meta_queries,
     rpc,
+    transaction,
     utils,
 )
 from .dbapi import NotSupportedError
@@ -622,7 +622,6 @@ class FlushCommand(object):
         caching.get_context().reset()
 
 
-@transaction.non_atomic
 def reserve_id(kind, id_or_name, namespace):
     #FIXME: This should use connection.client.allocate_ids
     from google.appengine.api.datastore import _GetConnection

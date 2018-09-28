@@ -3,9 +3,9 @@ import datetime
 from django.conf import settings
 from django.core.exceptions import NON_FIELD_ERRORS
 from django.utils.six import iteritems
-from gcloudc.db import transaction
 from google.cloud.datastore.key import Key
 
+from . import transaction
 from .dbapi import (
     IntegrityError,
     NotSupportedError,
