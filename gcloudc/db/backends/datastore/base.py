@@ -2,8 +2,10 @@
 import datetime
 import decimal
 import logging
+import os
 import warnings
 
+import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db.backends.base.base import BaseDatabaseWrapper
@@ -22,7 +24,10 @@ from django.utils import (
     timezone,
 )
 from django.utils.encoding import smart_text
-from google.cloud import datastore
+from google.cloud import (
+    datastore,
+    environment_vars,
+)
 
 from . import dbapi as Database
 from . import (
@@ -56,7 +61,11 @@ class Connection(object):
         self.settings_dict = params
 
         self.gclient = datastore.Client(
-            namespace=params.get("NAMESPACE", "")
+            namespace=params.get("NAMESPACE", ""),
+            project=params["PROJECT"],
+            # avoid a bug in the google client - it tries to authenticate even when the emulator is enabled
+            # see https://github.com/googleapis/google-cloud-python/issues/5738
+            _http=requests.Session if os.environ.get(environment_vars.GCD_HOST) else None,
         )
 
     def rollback(self):
