@@ -7,7 +7,7 @@ from django.conf import settings
 
 
 _BASE_COMMAND = "gcloud beta emulators datastore start --quiet --project=test".split()
-
+_DEFAULT_PORT = 9090
 
 class CloudDatastoreRunner:
     def __init__(self, *args, **kwargs):
@@ -17,7 +17,7 @@ class CloudDatastoreRunner:
     def add_arguments(self, parser):
         super().add_arguments(parser)
         parser.add_argument("--nodatastore", action="store_false", dest="datastore", default=True)
-        parser.add_argument("--datastore-port", action="store", dest="port", default=9090)
+        parser.add_argument("--datastore-port", action="store", dest="port", default=_DEFAULT_PORT)
 
     def execute(self, *args, **kwargs):
         try:
@@ -35,7 +35,7 @@ class CloudDatastoreRunner:
 
         return [
             "--data-dir=%s" % (os.path.join(BASE_DIR, ".datastore")),
-            "--host-port=127.0.0.1:%s" % kwargs.get("port", 9090)
+            "--host-port=127.0.0.1:%s" % kwargs.get("port", _DEFAULT_PORT)
         ]
 
     def _wait_for_datastore(self):
@@ -47,7 +47,7 @@ class CloudDatastoreRunner:
 
         while True:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            result = sock.connect_ex(('127.0.0.1', 8081))
+            result = sock.connect_ex(('127.0.0.1', _DEFAULT_PORT))
             if result == 0:
                 break
 
