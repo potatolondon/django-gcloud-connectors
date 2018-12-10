@@ -30,10 +30,7 @@ from google.cloud import (
 )
 
 from . import dbapi as Database
-from . import (
-    rpc,
-    transaction,
-)
+from . import rpc
 from .commands import (
     DeleteCommand,
     FlushCommand,
@@ -169,11 +166,11 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     # Datastore will store all integers as 64bit long values
     integer_field_ranges = {
-        'SmallIntegerField': (-MAXINT, MAXINT-1),
-        'IntegerField': (-MAXINT, MAXINT-1),
-        'BigIntegerField': (-MAXINT, MAXINT-1),
-        'PositiveSmallIntegerField': (0, MAXINT-1),
-        'PositiveIntegerField': (0, MAXINT-1),
+        'SmallIntegerField': (-MAXINT, MAXINT - 1),
+        'IntegerField': (-MAXINT, MAXINT - 1),
+        'BigIntegerField': (-MAXINT, MAXINT - 1),
+        'PositiveSmallIntegerField': (0, MAXINT - 1),
+        'PositiveIntegerField': (0, MAXINT - 1),
     }
 
     def bulk_batch_size(self, field, objs):
@@ -306,11 +303,7 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def prep_lookup_value(self, model, value, field, column=None):
         if field.primary_key and (not column or column == model._meta.pk.column):
-            try:
-                return self.prep_lookup_key(model, value, field)
-            except datastore_errors.BadValueError:
-                # A key couldn't be constructed from this value
-                return None
+            return self.prep_lookup_key(model, value, field)
 
         db_type = field.db_type(self.connection)
 
@@ -449,36 +442,36 @@ class DatabaseClient(BaseDatabaseClient):
 
 class DatabaseCreation(BaseDatabaseCreation):
     data_types = {
-        'AutoField':                  'key',
-        'RelatedAutoField':           'key',
-        'ForeignKey':                 'key',
-        'OneToOneField':              'key',
-        'ManyToManyField':            'key',
-        'BigIntegerField':            'long',
-        'BooleanField':               'bool',
-        'CharField':                  'string',
+        'AutoField': 'key',
+        'RelatedAutoField': 'key',
+        'ForeignKey': 'key',
+        'OneToOneField': 'key',
+        'ManyToManyField': 'key',
+        'BigIntegerField': 'long',
+        'BooleanField': 'bool',
+        'CharField': 'string',
         'CommaSeparatedIntegerField': 'string',
-        'DateField':                  'date',
-        'DateTimeField':              'datetime',
-        'DecimalField':               'decimal',
-        'DurationField':              'long',
-        'EmailField':                 'string',
-        'FileField':                  'string',
-        'FilePathField':              'string',
-        'FloatField':                 'float',
-        'ImageField':                 'string',
-        'IntegerField':               'integer',
-        'IPAddressField':             'string',
-        'NullBooleanField':           'bool',
-        'PositiveIntegerField':       'integer',
-        'PositiveSmallIntegerField':  'integer',
-        'SlugField':                  'string',
-        'SmallIntegerField':          'integer',
-        'TimeField':                  'time',
-        'URLField':                   'string',
-        'TextField':                  'text',
-        'XMLField':                   'text',
-        'BinaryField':                'bytes'
+        'DateField': 'date',
+        'DateTimeField': 'datetime',
+        'DecimalField': 'decimal',
+        'DurationField': 'long',
+        'EmailField': 'string',
+        'FileField': 'string',
+        'FilePathField': 'string',
+        'FloatField': 'float',
+        'ImageField': 'string',
+        'IntegerField': 'integer',
+        'IPAddressField': 'string',
+        'NullBooleanField': 'bool',
+        'PositiveIntegerField': 'integer',
+        'PositiveSmallIntegerField': 'integer',
+        'SlugField': 'string',
+        'SmallIntegerField': 'integer',
+        'TimeField': 'time',
+        'URLField': 'string',
+        'TextField': 'text',
+        'XMLField': 'text',
+        'BinaryField': 'bytes'
     }
 
     def __init__(self, *args, **kwargs):
@@ -620,7 +613,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self.autocommit = enabled
 
     def create_cursor(self, name=None):
-        self.name = name  # Django >= 1.11
+        self.name = name
         if not self.connection:
             self.connection = self.get_new_connection(self.settings_dict)
 
