@@ -59,7 +59,7 @@ class SQLInsertCompiler(SQLCompiler, compiler.SQLInsertCompiler):
     def as_sql(self, with_limits=True, with_col_aliases=False, subquery=False):
         self.pre_sql_setup()
 
-        from djangae.db.utils import get_concrete_fields
+        from gcloudc.db.backends.datastore.utils import get_concrete_fields
 
         # Always pass down all the fields on an insert
         return [(InsertCommand(

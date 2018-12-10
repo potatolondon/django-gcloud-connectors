@@ -162,7 +162,7 @@ MAXINT = 9223372036854775808
 
 
 class DatabaseOperations(BaseDatabaseOperations):
-    compiler_module = "djangae.db.backends.appengine.compiler"
+    compiler_module = "gcloudc.db.backends.datastore.compiler"
 
     # Datastore will store all integers as 64bit long values
     integer_field_ranges = {
@@ -585,6 +585,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.introspection = DatabaseIntrospection(self)
             self.validation = BaseDatabaseValidation(self)
 
+        self.gcloud_project = self.settings_dict['PROJECT']
+        self.namespace = self.settings_dict.get('NAMESPACE', '')
         self.autocommit = True
 
     def is_usable(self):

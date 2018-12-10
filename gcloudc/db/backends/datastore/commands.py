@@ -758,7 +758,7 @@ class InsertCommand(object):
 
             try:
                 return txn()
-            except:
+            except:  # noqa
                 # There are 3 possible reasons why we've ended up here:
                 # 1. The rpc.Put() failed, but note that because it's a transaction, the
                 #    exception isn't raised until the END of the transaction block.
@@ -770,14 +770,6 @@ class InsertCommand(object):
                 # transaction(s), and so we need to release them again.
                 constraints.release_markers(markers)
                 raise
-
-        # We can't really support this and maintain expected behaviour. If we chunked the insert and one of the
-        # chunks fails it will mean some of the data would be saved and rather than trying to communicate that back
-        # to the user it's better that they chunk the data themselves as they can deal with the failure better
-        if entity_group_count > datastore_stub_util._MAX_EG_PER_TXN:
-            raise BulkInsertError("Bulk inserts with unique constraints, or pre-defined keys are limited to {} instances on the datastore".format(
-                datastore_stub_util._MAX_EG_PER_TXN
-            ))
 
         return insert_chunk(self.included_keys, self.entities)
 

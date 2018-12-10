@@ -4,7 +4,6 @@ import logging
 import re
 from itertools import chain
 
-import django
 from django.db import (
     NotSupportedError,
     connections,
@@ -27,21 +26,6 @@ from .utils import (
     get_top_concrete_parent,
     has_concrete_parents,
 )
-
-try:
-    from django.db.models.query import FlatValuesListIterable
-except ImportError:
-    # Django < 1.8
-    class FlatValuesListIterable(object):
-        pass
-
-try:
-    from django.db.models.query import ValuesListQuerySet
-except ImportError:
-    # Django >= 1.9
-    class ValuesListQuerySet(object):
-        pass
-
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +128,10 @@ class WhereNode(object):
                 ]
             else:
                 # Django 1.11 has operators as symbols, earlier versions use "exact" etc.
-                if (operator == "isnull" and value is True) or (operator in ("exact", "lt", "lte", "<", "<=", "=") and not value):
+                if (
+                    (operator == "isnull" and value is True) or
+                    (operator in ("exact", "lt", "lte", "<", "<=", "=") and not value)
+                ):
                     # id=None will never return anything and
                     # Empty strings and 0 are forbidden as keys
                     self.will_never_return_results = True
@@ -196,7 +183,11 @@ class WhereNode(object):
         if self.is_leaf:
             return "[%s%s%s]" % (self.column, self.operator, self.value)
         else:
-            return "(%s:%s%s)" % (self.connector, "!" if self.negated else "", ",".join([repr(x) for x in self.children]))
+            return "(%s:%s%s)" % (
+                self.connector, "!" if self.negated else "", ",".join([
+                    repr(x) for x in self.children
+                ])
+            )
 
     def __eq__(self, rhs):
         if self.is_leaf != rhs.is_leaf:
@@ -375,7 +366,11 @@ class Query(object):
         field = get_field_from_column(self.model, column)
 
         if field is None:
-            raise NotSupportedError("{} is not a valid column for the queried model. Did you try to join?".format(column))
+            raise NotSupportedError(
+                "{} is not a valid column for the queried model. Did you try to join?".format(
+                    column
+                )
+            )
 
         if field.db_type(self.connection) in ("bytes", "text", "list", "set"):
             logger.warn("Disabling projection query as %s is an unprojectable type", column)
@@ -689,24 +684,17 @@ INVALID_ORDERING_FIELD_MESSAGE = (
     "field and instead order on that."
 )
 
+
 def _serialize_sql_value(value):
     if isinstance(value, six.integer_types):
         return value
     else:
         return six.text_type("NULL" if value is None else value)
 
-def _get_parser(query, connection=None):
-    version = django.VERSION[:2]
 
-    if version == (1, 8):
-        from djangae.db.backends.appengine.parsers import version_18
-        return version_18.Parser(query, connection)
-    elif version == (1, 9):
-        from djangae.db.backends.appengine.parsers import version_19
-        return version_19.Parser(query, connection)
-    else:
-        from djangae.db.backends.appengine.parsers import base
-        return base.BaseParser(query, connection)
+def _get_parser(query, connection=None):
+    from gcloudc.db.backends.appengine.parsers import base
+    return base.BaseParser(query, connection)
 
 
 def transform_query(connection, query):

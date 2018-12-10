@@ -1,4 +1,5 @@
 
+import collections
 import functools
 from datetime import datetime
 from decimal import Decimal
@@ -8,9 +9,13 @@ from django.apps import apps
 from django.conf import settings
 from django.db import IntegrityError
 from django.db.backends.utils import format_number
-from django.utils import six, timezone
+from django.utils import (
+    six,
+    timezone,
+)
 from google.cloud.datastore.key import Key
 from google.cloud.datastore.query import Query
+from google.cloud.datastore.entity import Entity
 
 try:
     from django.db.models.expressions import BaseExpression
@@ -209,8 +214,8 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
        is useful for special indexes (e.g. contains)
     """
 
-    from djangae.db.backends.appengine.indexing import special_indexes_for_column, get_indexer, IgnoreForIndexing
-    from djangae.db.backends.appengine import POLYMODEL_CLASS_ATTRIBUTE
+    from gcloudc.db.backends.datastore.indexing import special_indexes_for_column, get_indexer, IgnoreForIndexing
+    from gcloudc.db.backends.datastore import POLYMODEL_CLASS_ATTRIBUTE
 
     model = model or type(instance)
     inheritance_root = get_top_concrete_parent(model)
@@ -286,17 +291,17 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
                         # Otherwise we just set the column to the value
                         field_values[column] = v
 
-    kwargs = {}
-    if primary_key:
-        if isinstance(primary_key, six.integer_types):
-            kwargs["id"] = primary_key
-        elif isinstance(primary_key, six.string_types):
-            kwargs["name"] = primary_key
-        else:
-            raise ValueError("Invalid primary key value")
+    args = [db_table]
+    if primary_key is not None:
+        args.append(primary_key)
 
-    namespace = connection.settings_dict.get("NAMESPACE")
-    entity = datastore.Entity(db_table, namespace=namespace, **kwargs)
+    key = Key(
+        *args,
+        namespace=connection.namespace,
+        project=connection.gcloud_project
+    )
+
+    entity = Entity(key)
     entity.update(field_values)
 
     if fields_to_unindex:
