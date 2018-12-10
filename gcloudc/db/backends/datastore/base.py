@@ -503,7 +503,7 @@ class DatabaseCreation(BaseDatabaseCreation):
 
 class DatabaseIntrospection(BaseDatabaseIntrospection):
     def get_table_list(self, cursor):
-        query = self.connection.gclient.query(kind='__kind__')
+        query = cursor.connection.gclient.query(kind='__kind__')
         query.keys_only()
         kinds = [entity.key.id_or_name for entity in query.fetch()]
         return [TableInfo(x, "t") for x in kinds]
