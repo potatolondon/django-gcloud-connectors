@@ -9,6 +9,7 @@ from django.conf import settings
 _BASE_COMMAND = "gcloud beta emulators datastore start --quiet --project=test".split()
 _DEFAULT_PORT = 9090
 
+
 class CloudDatastoreRunner:
     def __init__(self, *args, **kwargs):
         self._process = None
