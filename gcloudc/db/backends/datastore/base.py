@@ -118,9 +118,9 @@ class Cursor(object):
 
     def fetchone(self, delete_flag=False):
         try:
-            result = self.last_select_command.results.next()
+            result = next(self.last_select_command.results)
 
-            if isinstance(result, (int, long)):
+            if isinstance(result, int):
                 return (result,)
 
             query = self.last_select_command.query
@@ -134,7 +134,7 @@ class Cursor(object):
             for col in self.last_select_command.query.init_list:
                 row.append(result.get(col))
 
-            self.returned_ids.append(result.key().id_or_name())
+            self.returned_ids.append(result.key.id_or_name)
             return row
         except StopIteration:
             return None

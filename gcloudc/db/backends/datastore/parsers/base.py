@@ -367,7 +367,7 @@ class BaseParser(object):
         return ret
 
     def get_extracted_ordering(self):
-        from djangae.db.backends.appengine.commands import log_once
+        from ..commands import log_once
         from django.db.models.expressions import OrderBy, F
 
         query = self.django_query

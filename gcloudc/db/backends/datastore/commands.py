@@ -130,14 +130,7 @@ log_once.logged = set()
 
 
 def convert_django_ordering_to_gae(ordering):
-    result = []
-
-    for column in ordering:
-        if column.startswith("-"):
-            result.append((column.lstrip("-"), rpc.Query.DESCENDING))
-        else:
-            result.append((column, rpc.Query.ASCENDING))
-    return result
+    return ordering
 
 
 def limit_results_generator(results, limit):
@@ -192,7 +185,7 @@ class EntityTransforms:
         if result is None:
             return result
 
-        value = result.key().id_or_name()
+        value = result.key.id_or_name
         result[model._meta.pk.column] = value
         result[concrete_model._meta.pk.column] = value
         return result
@@ -296,7 +289,7 @@ class EntityTransforms:
         if result is None:
             return result
 
-        if result.key() in excluded_pks:
+        if result.key in excluded_pks:
             return None
 
         return result
@@ -304,7 +297,7 @@ class EntityTransforms:
 
 class SelectCommand(object):
     def __init__(self, connection, query, keys_only=False):
-        self.connection = connection
+        self.connection = connection.alias
         self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
 
         self.query = transform_query(connection, query)
@@ -360,9 +353,8 @@ class SelectCommand(object):
 
         query_kwargs = {
             "kind": self.query.concrete_model._meta.db_table,
-            "distinct": self.query.distinct or None,
-            "keys_only": self.keys_only or None,
-            "projection": projection,
+            "distinct_on": self.query.distinct or (),
+            "projection": projection or (),
             "namespace": self.namespace,
         }
 
@@ -379,22 +371,26 @@ class SelectCommand(object):
 
         # Deal with the no filters case
         if self.query.where is None:
-            query = Query(
+            query = transaction._rpc(self.connection).query(
                 **query_kwargs
             )
-            try:
-                query.Order(*ordering)
-            except datastore_errors.BadArgumentError as e:
-                raise NotSupportedError(e)
+
+            if self.keys_only:
+                query.keys_only()
+
+            query.order = ordering
             return query
 
         assert self.query.where
 
         # Go through the normalized query tree
         for and_branch in self.query.where.children:
-            query = Query(
+            query = transaction._rpc(self.connection).query(
                 **query_kwargs
             )
+
+            if self.keys_only:
+                query.keys_only()
 
             # This deals with the oddity that the root of the tree may well be a leaf
             filters = [and_branch] if and_branch.is_leaf else and_branch.children
@@ -443,13 +439,8 @@ class SelectCommand(object):
                         query[lookup] = value
 
             if ordering:
-                try:
-                    query.Order(*ordering)
-                except datastore_errors.BadArgumentError as e:
-                    # This is the easiest way to detect unsupported orderings
-                    # ideally we'd detect this at the query normalization stage
-                    # but it's a lot of hassle, this is much easier and seems to work OK
-                    raise NotSupportedError(e)
+                query.order = ordering
+
             queries.append(query)
 
         if can_perform_datastore_get(self.query):
@@ -502,7 +493,7 @@ class SelectCommand(object):
                 # if anyone comes up with a faster idea let me know!
                 if isinstance(query, meta_queries.QueryByKeys):
                     # If this is a QueryByKeys, just do the datastore Get and count the results
-                    resultset = (x.key() for x in query.Run(limit=limit, offset=offset) if x)
+                    resultset = (x.key for x in query.fetch(limit=limit, offset=offset) if x)
                 else:
                     count_query = Query(
                         query._Query__kind, keys_only=True, namespace=self.namespace
@@ -512,7 +503,11 @@ class SelectCommand(object):
                 self.results = [len([y for y in resultset if y not in excluded_pks])]
                 self.results_returned = 1
             else:
-                self.results = [query.Count(limit=limit, offset=offset)]
+                query.keys_only()
+
+                self.results = [
+                    len(list(query.fetch(limit=limit, offset=offset)))
+                ]
                 self.results_returned = 1
             return
         elif self.query.kind == "AVERAGE":
@@ -540,7 +535,7 @@ class SelectCommand(object):
             seen.add(key)
             return result
 
-        for entity in query.Run(limit=limit, offset=offset):
+        for entity in query.fetch(limit=limit, offset=offset):
             # If this is a keys only query, we need to generate a fake entity
             # for each key in the result set
             if self.keys_only:
