@@ -174,15 +174,16 @@ def release_markers(markers):
     # Note that these should all be from the same Django model instance, and therefore there should
     # be a maximum of 25 of them (because everything blows up if you have more than that - limitation)
 
-    @db.transactional(propagation=TransactionOptions.INDEPENDENT, xg=len(markers) > 1)
+    @transaction.atomic(independent=True, enable_cache=False)
     def txn():
-        Delete([marker.key() for marker in markers])
+        transaction._rpc().delete([marker.key() for marker in markers])
+
     txn()
 
 
 def release_identifiers(identifiers, namespace):
 
-    @db.transactional(propagation=TransactionOptions.INDEPENDENT, xg=len(identifiers) > 1)
+    @transaction.atomic(independent=True, enable_cache=False)
     def txn():
         _release_identifiers(identifiers, namespace)
     txn()
@@ -203,7 +204,7 @@ def release(model, entity):
     release_identifiers(identifiers, namespace=namespace)
 
 
-@transaction.atomic(xg=True)
+@transaction.atomic(xg=True, enable_cache=False)
 def update_identifiers(to_acquire, to_release, key):
     """ A combination of acquire_identifiers and release_identifiers in a combined transaction. """
     _acquire_identifiers(to_acquire, key)

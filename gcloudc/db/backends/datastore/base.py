@@ -30,7 +30,7 @@ from google.cloud import (
 )
 
 from . import dbapi as Database
-from . import rpc
+
 from .commands import (
     DeleteCommand,
     FlushCommand,
@@ -64,6 +64,12 @@ class Connection(object):
             # see https://github.com/googleapis/google-cloud-python/issues/5738
             _http=requests.Session if os.environ.get(environment_vars.GCD_HOST) else None,
         )
+
+    def acquire_constraint_markers(self, markers):
+        pass
+
+    def release_constraint_markers(self, markers):
+        pass
 
     def rollback(self):
         pass
@@ -149,7 +155,7 @@ class Cursor(object):
 
     @property
     def lastrowid(self):
-        return self.returned_ids[-1].id_or_name()
+        return self.returned_ids[-1].id_or_name
 
     def __iter__(self):
         return self

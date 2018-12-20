@@ -25,9 +25,8 @@ except ImportError:
     class ValuesListQuerySet(object):
         pass
 
-from djangae import environment
 
-from djangae.db.utils import get_top_concrete_parent
+from ..utils import get_top_concrete_parent
 
 
 logger = logging.getLogger(__name__)

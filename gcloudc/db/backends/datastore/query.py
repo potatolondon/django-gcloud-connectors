@@ -14,7 +14,6 @@ from django.utils import six
 
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
-    rpc,
 )
 from .indexing import (
     add_special_index,
@@ -693,7 +692,7 @@ def _serialize_sql_value(value):
 
 
 def _get_parser(query, connection=None):
-    from gcloudc.db.backends.appengine.parsers import base
+    from gcloudc.db.backends.datastore.parsers import base
     return base.BaseParser(query, connection)
 
 

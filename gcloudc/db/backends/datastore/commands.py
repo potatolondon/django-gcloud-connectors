@@ -18,10 +18,7 @@ from google.cloud.datastore.query import Query
 
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
-    caching,
-    constraints,
     meta_queries,
-    rpc,
     transaction,
     utils,
 )
@@ -595,31 +592,22 @@ class FlushCommand(object):
         our cursor.execute
     """
     def __init__(self, table, connection):
+        self.connection = connection.alias
         self.table = table
         self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
 
     def execute(self):
         table = self.table
-        query = rpc.Query(table, keys_only=True, namespace=self.namespace)
-        while query.Count():
-            rpc.Delete(query.Run())
-
-        # Delete the markers we need to
-        from djangae.db.constraints import UniqueMarker
-        query = rpc.Query(UniqueMarker.kind(), keys_only=True, namespace=self.namespace)
-        query["__key__ >="] = rpc.Key.from_path(
-            UniqueMarker.kind(), self.table, namespace=self.namespace
+        query = transaction._rpc(self.connection).query(
+            kind=table, namespace=self.namespace
         )
-        query["__key__ <"] = rpc.Key.from_path(
-            UniqueMarker.kind(), u"{}{}".format(self.table, u'\ufffd'), namespace=self.namespace
-        )
-        while query.Count():
-            rpc.Delete(query.Run())
 
-        # TODO: ideally we would only clear the cached objects for the table that was flushed, but
-        # we have no way of doing that
-        memcache.flush_all()
-        caching.get_context().reset()
+        query.keys_only()
+
+        results = [x.key for x in query.fetch()]
+        while results:
+            transaction._rpc(self.connection).delete(results)
+            results = [x.key for x in query.fetch()]
 
 
 def reserve_id(kind, id_or_name, namespace):
@@ -692,7 +680,14 @@ class InsertCommand(object):
         def perform_insert(entities):
             results = []
             for primary, descendents in entities:
-                new_key = rpc.Put(primary)
+                if primary.key.is_partial:
+                    primary.key = primary.key.completed_key(
+                        transaction._rpc(self.connection)._generate_id()
+                    )
+
+                transaction._rpc(self.connection).put(primary)
+                new_key = primary.key
+
                 if descendents:
                     for i, descendent in enumerate(descendents):
                         descendents[i] = Entity(
@@ -704,30 +699,12 @@ class InsertCommand(object):
                         )
                         descendents[i].update(descendent)
 
-                    rpc.Put(descendents)
+                    transaction._rpc(self.connection).put(descendents)
                 results.append(new_key)
             return results
 
-        if not constraints.has_active_unique_constraints(self.model) and not check_existence:
-            # Fast path, no constraint checks and no keys mean we can just do a normal rpc.Put
-            # which isn't limited to 25
-            results = perform_insert(self.entities)  # This modifies self.entities and sets their keys
-            caching.add_entities_to_cache(
-                self.model,
-                [x[0] for x in self.entities],
-                caching.CachingSituation.DATASTORE_GET_PUT,
-                self.namespace,
-                skip_memcache=True
-            )
-            return results
-
-        entity_group_count = len(self.entities)
-
         def insert_chunk(keys, entities):
-            # Note that this is limited to a maximum of 25 entities.
-            markers = []
-
-            @db.transactional(xg=entity_group_count > 1)
+            @transaction.atomic(enable_cache=False)
             def txn():
                 for key in keys:
                     if check_existence and key is not None:
@@ -743,33 +720,9 @@ class InsertCommand(object):
 
                 results = perform_insert(entities)
 
-                for entity, _ in entities:
-                    markers.extend(constraints.acquire(self.model, entity))
-
-                caching.add_entities_to_cache(
-                    self.model,
-                    [x[0] for x in entities],
-                    caching.CachingSituation.DATASTORE_GET_PUT,
-                    self.namespace,
-                    skip_memcache=True
-                )
-
                 return results
 
-            try:
-                return txn()
-            except:  # noqa
-                # There are 3 possible reasons why we've ended up here:
-                # 1. The rpc.Put() failed, but note that because it's a transaction, the
-                #    exception isn't raised until the END of the transaction block.
-                # 2. Some of the markers were acquired, but then we hit a unique constraint
-                #    conflict and so the outer transaction was rolled back.
-                # 3. Something else went wrong after we'd acquired markers, e.g. the
-                #    caching.add_entities_to_cache call got hit by a metaphorical bus.
-                # In any of these cases, we (may) have acquired markers via (a) nested, independent
-                # transaction(s), and so we need to release them again.
-                constraints.release_markers(markers)
-                raise
+            return txn()
 
         return insert_chunk(self.included_keys, self.entities)
 

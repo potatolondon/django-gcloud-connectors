@@ -8,7 +8,6 @@ from django.conf import settings
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
     caching,
-    rpc,
     utils,
 )
 

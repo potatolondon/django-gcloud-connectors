@@ -1,37 +1,66 @@
 
 
-import copy
+import uuid
 import threading
 
 from django.db import connections
 from gcloudc import context_decorator
-
-from . import (
-    caching,
-    rpc,
-)
+from google.cloud import exceptions
 
 
 def in_atomic_block(using='default'):
-    connection = connections[using]
-    return bool(connection.client.current_transaction())
-
-
-def _datastore_get_handler(signal, sender, keys, **kwargs):
-    txn = current_transaction()
-    if txn:
-        txn._seen_keys.update(set(keys))
-
-
-rpc.datastore_get.connect(_datastore_get_handler, dispatch_uid='_datastore_get_handler')
+    connection = connections[using].connection
+    return bool(connection.gclient.current_transaction)
 
 
 class Transaction(object):
-    def __init__(self, transaction, connection):
-        self._transaction = transaction
+    def __init__(self, connection, datastore_transaction=None):
         self._connection = connection
-        self._previous_connection = None
-        self._seen_keys = set()
+        self._datastore_transaction = datastore_transaction
+
+    def _generate_id(self):
+        """
+            The Datastore API won't generate keys automatically until a
+            transaction commits, that's too late!
+
+            This is a hack, it might be the only hack we can do :(
+        """
+        unsigned = uuid.uuid4().int & (1 << 64) - 1
+        return unsigned - (2 ** 64)
+
+    def put(self, entity):
+        putter = (
+            self._datastore_transaction.put
+            if self._datastore_transaction
+            else self._connection.gclient.put
+        )
+
+        return putter(entity)
+
+    def query(self, *args, **kwargs):
+        return self._connection.gclient.query(*args, **kwargs)
+
+    def get(self, key):
+        # For some reason Datastore Transactions don't provide their
+        # own get
+        getter = self._connection.gclient.get
+        return getter(key)
+
+    def delete(self, key_or_keys):
+        if hasattr(key_or_keys, '__iter__'):
+            deleter = (
+                self._datastore_transaction.delete_multi
+                if self._datastore_transaction
+                else self._connection.gclient.delete_multi
+            )
+        else:
+            deleter = (
+                self._datastore_transaction.delete
+                if self._datastore_transaction
+                else self._connection.gclient.delete
+            )
+
+        return deleter(key_or_keys)
 
     def enter(self):
         self._seen_keys = set()
@@ -49,6 +78,9 @@ class Transaction(object):
 
     def has_already_been_read(self, instance):
         if instance.pk is None:
+            return False
+
+        if not self._datastore_transaction:
             return False
 
         key = rpc.Key.from_path(
@@ -103,24 +135,15 @@ class Transaction(object):
 
 
 class IndependentTransaction(Transaction):
-    def __init__(self, options):
-        self._options = options
-        super(IndependentTransaction, self).__init__(None)
+    def __init__(self, connection):
+        txn = connection.gclient.transaction()
+        super().__init__(connection, txn)
 
     def _enter(self):
-        if IsInTransaction():
-            self._previous_connection = _GetConnection()
-            assert(isinstance(self._previous_connection, TransactionalConnection))
-
-            _PopConnection()
-
-        self._connection = _GetConnection().new_transaction(self._options)
-        _PushConnection(self._connection)
+        self._datastore_transaction.begin()
 
     def _exit(self):
-        _PopConnection()
-        if self._previous_connection:
-            _PushConnection(self._previous_connection)
+        self._datastore_transaction = None
 
 
 class NestedTransaction(Transaction):
@@ -132,30 +155,47 @@ class NestedTransaction(Transaction):
 
 
 class NormalTransaction(Transaction):
-    def __init__(self, options):
-        self._options = options
-        connection = _GetConnection().new_transaction(options)
-        super(NormalTransaction, self).__init__(connection)
+    def __init__(self, connection):
+        txn = connection.gclient.transaction()
+        super().__init__(connection, txn)
 
     def _enter(self):
-        _PushConnection(self._connection)
+        self._datastore_transaction.begin()
 
     def _exit(self):
-        _PopConnection()
+        self._datastore_transaction = None
 
 
 class NoTransaction(Transaction):
     def _enter(self):
-        if IsInTransaction():
-            self._previous_connection = _GetConnection()
-            _PopConnection()
+        raise NotImplementedError()
 
     def _exit(self):
-        if self._previous_connection:
-            _PushConnection(self._previous_connection)
+        pass
 
 
 _STORAGE = threading.local()
+
+
+def _rpc(using):
+    """
+        In the low-level connector code, we use this function
+        to return a transaction to perform a Get/Put/Delete on
+        this effectively returns the current_transaction or a new
+        RootTransaction() which is basically no transaction at all.
+    """
+
+    class RootTransaction(Transaction):
+        def _enter(self):
+            pass
+
+        def _exit(self):
+            pass
+
+    return (
+        current_transaction(using) or
+        RootTransaction(connections[using].connection)
+    )
 
 
 def current_transaction(using='default'):
@@ -200,7 +240,7 @@ class TransactionFailedError(Exception):
 
 
 class AtomicDecorator(context_decorator.ContextDecorator):
-    VALID_ARGUMENTS = ("independent", "mandatory", "using", "read_only")
+    VALID_ARGUMENTS = ("independent", "mandatory", "using", "read_only", "enable_cache")
 
     @classmethod
     def _do_enter(cls, state, decorator_args):
@@ -211,29 +251,30 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         read_only = decorator_args.get("read_only", False)
         using = decorator_args.get("using", "default")
 
-        options = CreateTransactionOptions(
-            xg=xg,
-            propagation=TransactionOptions.INDEPENDENT if independent else None
-        )
+        mandatory = False if mandatory is None else mandatory
+        independent = False if independent is None else independent
+        read_only = False if read_only is None else read_only
+        using = "default" if using is None else using
+
+        # FIXME: Implement context caching for transactions
+        enable_cache = decorator_args.get("enable_cache", True)
 
         new_transaction = None
+        connection = connections[using].connection
 
         if independent:
-            new_transaction = IndependentTransaction(options)
+            new_transaction = IndependentTransaction(connection)
         elif in_atomic_block():
-            new_transaction = NestedTransaction(None)
+            new_transaction = NestedTransaction()
         elif mandatory:
             raise TransactionFailedError(
                 "You've specified that an outer transaction is mandatory, but one doesn't exist"
             )
         else:
-            new_transaction = NormalTransaction(options)
+            new_transaction = NormalTransaction(connection)
 
         _STORAGE.transaction_stack.append(new_transaction)
         _STORAGE.transaction_stack[-1].enter()
-
-        if isinstance(new_transaction, (IndependentTransaction, NormalTransaction)):
-            caching.get_context().stack.push()
 
         # We may have created a new transaction, we may not. current_transaction() returns
         # the actual active transaction (highest NormalTransaction or lowest IndependentTransaction)
@@ -243,27 +284,20 @@ class AtomicDecorator(context_decorator.ContextDecorator):
     @classmethod
     def _do_exit(cls, state, decorator_args, exception):
         _init_storage()
-        context = caching.get_context()
 
         transaction = _STORAGE.transaction_stack.pop()
 
         try:
-            if transaction._connection:
+            if transaction._datastore_transaction:
                 if exception:
-                    transaction._connection.rollback()
+                    transaction._datastore_transaction.rollback()
                 else:
-                    if not transaction._connection.commit():
+                    try:
+                        transaction._datastore_transaction.commit()
+                    except exceptions.GoogleAPIError:
                         raise TransactionFailedError()
         finally:
-            if isinstance(transaction, (IndependentTransaction, NormalTransaction)):
-                # Clear the context cache at the end of a transaction
-                if exception:
-                    context.stack.pop(discard=True)
-                else:
-                    context.stack.pop(apply_staged=True, clear_staged=True)
-
             transaction.exit()
-            transaction._connection = None
 
 
 atomic = AtomicDecorator

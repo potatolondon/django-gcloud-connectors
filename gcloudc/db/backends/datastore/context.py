@@ -2,7 +2,6 @@ import copy
 import sys
 
 from django.conf import settings
-from . import rpc
 
 
 def key_or_entity_compare(lhs, rhs):
