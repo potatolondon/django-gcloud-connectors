@@ -47,11 +47,14 @@ class Transaction(object):
     def query(self, *args, **kwargs):
         return self._connection.gclient.query(*args, **kwargs)
 
-    def get(self, key):
+    def get(self, key_or_keys):
         # For some reason Datastore Transactions don't provide their
         # own get
-        getter = self._connection.gclient.get
-        return getter(key)
+        if hasattr(key_or_keys, "__iter__"):
+            getter = self._connection.gclient.get_multi
+        else:
+            getter = self._connection.gclient.get
+        return getter(key_or_keys)
 
     def delete(self, key_or_keys):
         if hasattr(key_or_keys, '__iter__'):

@@ -337,7 +337,7 @@ class DatabaseOperations(BaseDatabaseOperations):
                 # round() always returns a float, which has a smaller max value than an int
                 # so only round() it if it's already a float
                 value = round(value)
-            value = long(value)
+            value = int(value)
         elif db_type == 'float':
             value = float(value)
         elif db_type == 'string' or db_type == 'text':

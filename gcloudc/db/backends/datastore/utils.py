@@ -381,7 +381,7 @@ def entity_matches_query(entity, query):
         Return True if the entity would potentially be returned by the datastore
         query
     """
-    from djangae.db.backends.appengine.dbapi import CouldBeSupportedError
+    from . import meta_queries
 
     OPERATORS = {
         "=": lambda x, y: x == y,
@@ -392,50 +392,44 @@ def entity_matches_query(entity, query):
     }
 
     queries = [query]
-    if isinstance(query, datastore.MultiQuery):
-        raise CouldBeSupportedError("We just need to separate the multiquery "
-                                    "into 'queries' then everything should work")
+    if isinstance(query, meta_queries.AsyncMultiQuery):
+        raise NotImplementedError(
+            "We just need to separate the multiquery "
+            "into 'queries' then everything should work"
+        )
 
     for query in queries:
         comparisons = chain(
-            [("_Query__kind", "=", "_Query__kind") ],
-            [tuple(x.split(" ") + [ x ]) for x in query.keys()]
+            [("__kind__", "=")],
+            [(x[0], x[1]) for x in query.filters]
         )
 
-        for ent_attr, op, query_attr in comparisons:
+        for ent_attr, op in comparisons:
             if ent_attr == "__key__":
                 continue
 
             op = OPERATORS[op]  # We want this to throw if there's some op we don't know about
 
-            if ent_attr == "_Query__kind":
-                ent_attr = entity.kind()
+            if ent_attr == "__kind__":
+                ent_attr = entity.kind
+                query_value = query.kind
             else:
                 ent_attr = entity.get(ent_attr)
+                query_value = _get_filter(query, (ent_attr, op))
 
-            if callable(ent_attr):
-                # entity.kind() is a callable, so we need this to save special casing it in a more
-                # ugly way
-                ent_attr = ent_attr()
-
-            if not isinstance(query_attr, (list, tuple)):
-                query_attrs = [query_attr]
+            if not isinstance(query_value, (list, tuple)):
+                query_values = [query_value]
             else:
                 # The query value can be a list of ANDed values
-                query_attrs = query_attr
-
-            query_attrs = (
-                getattr(query, x) if x == "_Query__kind" else query.get(x)
-                for x in query_attrs
-            )
+                query_values = query_value
 
             if not isinstance(ent_attr, (list, tuple)):
-                ent_attr = [ ent_attr ]
+                ent_attr = [ent_attr]
 
             matches = False
-            for query_attr in query_attrs:  # [22, 23]
-                #If any of the values don't match then this query doesn't match
-                if not any(op(attr, query_attr) for attr in ent_attr):
+            for value in query_values:  # [22, 23]
+                # If any of the values don't match then this query doesn't match
+                if not any(op(attr, value) for attr in ent_attr):
                     matches = False
                     break
             else:

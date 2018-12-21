@@ -304,6 +304,8 @@ class QueryByKeys(object):
             2. Multikey projection, async MultiQueries with ancestors chained
             3. Full select, datastore get
         """
+        from gcloudc.db.backends.datastore import transaction
+
         base_query = self.queries[0]
 
         is_projection = False
@@ -341,7 +343,9 @@ class QueryByKeys(object):
             else:
                 results = AsyncMultiQuery(multi_query, orderings).Run(limit=to_fetch)
         else:
-            results = rpc.Get(self.queries_by_key.keys())
+            results = transaction._rpc(self.connection).get(
+                [x for x in self.queries_by_key.keys()]
+            )
 
         def iter_results(results):
             returned = 0
@@ -358,7 +362,7 @@ class QueryByKeys(object):
                 else:
                     matches_query = any(
                         entity_matches_query(result, qry)
-                        for qry in self.queries_by_key[result.key()]
+                        for qry in self.queries_by_key[result.key]
                     )
 
                 if not matches_query:

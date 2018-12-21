@@ -561,7 +561,7 @@ class SelectCommand(object):
         for entity in query.fetch(limit=limit, offset=offset):
             # If this is a keys only query, we need to generate a fake entity
             # for each key in the result set
-            if self.keys_only:
+            if isinstance(entity, Key):
                 entity = EntityTransforms.convert_key_to_entity(entity)
 
             entity = EntityTransforms.ignore_excluded_pks(excluded_pks, entity)
