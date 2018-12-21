@@ -1,5 +1,7 @@
 from hashlib import md5
 
+from . import meta_queries
+
 
 def _unique_combinations(model, ignore_pk=False):
     unique_names = [ [ model._meta.get_field(y).name for y in x ] for x in model._meta.unique_together ]
@@ -76,13 +78,13 @@ def query_is_unique(model, query):
         that unique combination. Otherwise return False
     """
 
-    if isinstance(query, datastore.MultiQuery):
+    if isinstance(query, meta_queries.AsyncMultiQuery):
         # By definition, a multiquery is not unique
         return False
 
     combinations = _unique_combinations(model)
 
-    queried_fields = [ x.strip() for x in query.keys() ]
+    queried_fields = [x[0] for x in query.filters]
 
     for combination in combinations:
         unique_match = True

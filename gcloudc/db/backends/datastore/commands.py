@@ -15,6 +15,7 @@ from django.utils.encoding import (
 )
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
+from google.cloud.datastore.key import Key
 
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
@@ -34,6 +35,8 @@ from .utils import (
     get_datastore_key,
     get_field_from_column,
     has_concrete_parents,
+    _get_filter,
+    _has_filter
 )
 
 logger = logging.getLogger(__name__)
@@ -101,7 +104,7 @@ def field_conv_day_only(value):
 
 
 def coerce_unicode(value):
-    if isinstance(value, str):
+    if isinstance(value, bytes):
         try:
             value = value.decode('utf-8')
         except UnicodeDecodeError:
@@ -111,7 +114,7 @@ def coerce_unicode(value):
             raise DatabaseError("Bytestring is not encoded in utf-8")
 
     # The SDK raises BadValueError for unicode sub-classes like SafeText.
-    return unicode(value)
+    return str(value)
 
 
 def log_once(logging_call, text, args):
@@ -175,6 +178,7 @@ class EntityTransforms:
             def __init__(self, key):
                 self._key = key
 
+            @property
             def key(self):
                 return self._key
 
@@ -268,7 +272,11 @@ class EntityTransforms:
         """
             String values returned from projection queries return as 'str' not 'unicode'
             See https://github.com/potatolondon/djangae/issues/1026
+
+            FIXME: This was the case on App Engine, probably not on Cloud Datastore. When
+            all original Djangae tests pass, let's remove this function and see if they still pass!
         """
+
         if result is None:
             return None
 
@@ -279,8 +287,8 @@ class EntityTransforms:
 
         for field in fields:
             col = field.column
-            if col in result and isinstance(result[col], str):
-                result[col] = unicode(result[col], "utf-8")
+            if col in result and isinstance(result[col], bytes):
+                result[col] = str(result[col], "utf-8")
 
         return result
 
@@ -396,7 +404,7 @@ class SelectCommand(object):
             filters = [and_branch] if and_branch.is_leaf else and_branch.children
 
             for filter_node in filters:
-                lookup = "{} {}".format(filter_node.column, filter_node.operator)
+                lookup = (filter_node.column, filter_node.operator)
 
                 value = filter_node.value
 
@@ -411,32 +419,41 @@ class SelectCommand(object):
                     )
                 elif isinstance(value, six.string_types):
                     value = coerce_unicode(value)
-                elif isinstance(value, rpc.Key):
+                elif isinstance(value, Key):
                     # Make sure we apply the current namespace to any lookups
                     # by key. Fixme: if we ever add key properties this will break if
                     # someone is trying to filter on a key which has a different namespace
                     # to the active one.
-                    value = rpc.Key.from_path(
-                        value.kind(),
-                        value.id_or_name(),
+                    value = Key(
+                        value.kind,
+                        value.id_or_name,
+                        project=value.project,
                         namespace=self.namespace
                     )
 
                 # If there is already a value for this lookup, we need to make the
                 # value a list and append the new entry
-                if lookup in query and not isinstance(query[lookup], (list, tuple)) and query[lookup] != value:
-                    query[lookup] = [query[lookup]] + [value]
+                filter_value = _get_filter(query, lookup)
+                if (
+                    _has_filter(query, lookup) and
+                    not isinstance(filter_value, (list, tuple)) and
+                    filter_value != value
+                ):
+                    new_value = [filter_value] + [value]
+                    query.add_filter(lookup[0], lookup[1], new_value)
                 else:
                     # If the value is a list, we can't just assign it to the query
                     # which will treat each element as its own value. So in this
                     # case we nest it. This has the side effect of throwing a BadValueError
                     # which we could throw ourselves, but the datastore might start supporting
                     # list values in lookups.. you never know!
+                    # FIXME: I can't remember the reason for this rather than actually just
+                    # throwing an error?
                     if isinstance(value, (list, tuple)):
-                        query[lookup] = [value]
+                        query.add_filter(lookup[0], lookup[1], [value])
                     else:
                         # Common case: just add the raw where constraint
-                        query[lookup] = value
+                        query.add_filter(lookup[0], lookup[1], value)
 
             if ordering:
                 query.order = ordering
@@ -445,7 +462,13 @@ class SelectCommand(object):
 
         if can_perform_datastore_get(self.query):
             # Yay for optimizations!
-            return meta_queries.QueryByKeys(self.query.model, queries, ordering, self.namespace)
+            return meta_queries.QueryByKeys(
+                self.connection,
+                self.query.model,
+                queries,
+                ordering,
+                self.namespace
+            )
 
         if len(queries) == 1:
             identifier = query_is_unique(self.query.model, queries[0])
@@ -887,13 +910,10 @@ class UpdateCommand(object):
         # work on nested functions
         rollback_markers = [False]
 
-        @db.transactional
+        @transaction.atomic(cache_enabled=False)
         def txn():
-            caching.remove_entities_from_cache_by_key([key], self.namespace)
-
-            try:
-                result = rpc.Get(key)
-            except datastore_errors.EntityNotFoundError:
+            result = transaction._rpc(self.connection).get(key)
+            if result is None:
                 # Return false to indicate update failure
                 return False
 
@@ -951,7 +971,7 @@ class UpdateCommand(object):
                     Inserts result, and any descendents with their ancestor
                     value set
                 """
-                inserted_key = rpc.Put(result)
+                inserted_key = transaction._rpc(self.connection).put(result)
                 if descendents:
                     for i, descendent in enumerate(descendents):
                         descendents[i] = Entity(
@@ -962,50 +982,9 @@ class UpdateCommand(object):
                             name=descendent.key().name() or None
                         )
                         descendents[i].update(descendent)
-                    rpc.Put(descendents)
+                    transaction._rpc(self.connection).put(descendents)
 
-            if not constraints.has_active_unique_constraints(self.model):
-                # The fast path, no constraint checking
-                perform_insert()
-
-                caching.add_entities_to_cache(
-                    self.model,
-                    [result],
-                    caching.CachingSituation.DATASTORE_PUT,
-                    self.namespace,
-                    skip_memcache=True,
-                )
-            else:
-                markers_to_acquire[:], markers_to_release[:] = constraints.get_markers_for_update(
-                    self.model, original, result
-                )
-
-                perform_insert()
-
-                constraints.update_identifiers(markers_to_acquire, markers_to_release, result.key())
-
-                # If the rpc.Put() fails then the exception will only be raised when the
-                # transaction applies, which means that we will still get to here and will still have
-                # applied the marker changes (because they're in a nested, independent transaction).
-                # Hence we set this flag to tell us that we got this far and that we should roll them back.
-                rollback_markers[0] = True
-                # If something dies between here and the `return` statement then we'll have stale unique markers
-
-                try:
-                    # Update the cache before dealing with unique markers, as CachingSituation.DATASTORE_PUT
-                    # will only update the context cache
-                    caching.add_entities_to_cache(
-                        self.model,
-                        [result],
-                        caching.CachingSituation.DATASTORE_PUT,
-                        self.namespace,
-                        skip_memcache=True,
-                    )
-                except:
-                    # We ignore the exception because raising will rollback the transaction causing
-                    # an inconsistent state
-                    logger.exception("Unable to update the context cache")
-                    pass
+            perform_insert()
 
             # Return true to indicate update success
             return True
@@ -1022,7 +1001,7 @@ class UpdateCommand(object):
 
         i = 0
         for result in self.select.results:
-            if self._update_entity(result.key()):
+            if self._update_entity(result.key):
                 # Only increment the count if we successfully updated
                 i += 1
 

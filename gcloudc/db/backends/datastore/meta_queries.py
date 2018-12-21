@@ -1,6 +1,6 @@
 import copy
 import threading
-from functools import partial
+from functools import partial, cmp_to_key
 from itertools import groupby
 
 from django.conf import settings
@@ -8,7 +8,11 @@ from django.conf import settings
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
     caching,
-    utils,
+)
+from .utils import (
+    _get_filter,
+    django_ordering_comparison,
+    entity_matches_query
 )
 
 
@@ -243,13 +247,13 @@ class AsyncMultiQuery(object):
                     raise StopIteration()
 
 
-def _convert_entity_based_on_query_options(entity, opts):
-    if opts.keys_only:
-        return entity.key()
+def _convert_entity_based_on_query_options(entity, keys_only, projection):
+    if keys_only:
+        return entity.key
 
-    if opts.projection:
+    if projection:
         for k in entity.keys()[:]:
-            if k not in list(opts.projection) + [POLYMODEL_CLASS_ATTRIBUTE]:
+            if k not in list(projection) + [POLYMODEL_CLASS_ATTRIBUTE]:
                 del entity[k]
 
     return entity
@@ -264,17 +268,18 @@ DEFAULT_MAX_ENTITY_COUNT = 8
 class QueryByKeys(object):
     """ Does the most efficient fetching possible for when we have the keys of the entities we want. """
 
-    def __init__(self, model, queries, ordering, namespace):
+    def __init__(self, connection, model, queries, ordering, namespace):
         # Imported here for potential circular import and isolation reasons
-        from djangae.db.backends.appengine.dnf import DEFAULT_MAX_ALLOWABLE_QUERIES
+        from .dnf import DEFAULT_MAX_ALLOWABLE_QUERIES
 
         # `queries` should be filtered by __key__ with keys that have the namespace applied to them.
         # `namespace` is passed for explicit niceness (mostly so that we don't have to assume that
         # all the keys belong to the same namespace, even though they will).
         def _get_key(query):
-            result = query["__key__ ="]
+            result = _get_filter(query, ("__key__", "="))
             return result
 
+        self.connection = connection
         self.model = model
         self.namespace = namespace
 
@@ -289,9 +294,9 @@ class QueryByKeys(object):
         self.can_multi_query = self.query_count < self.max_allowable_queries
 
         self.ordering = ordering
-        self._Query__kind = queries[0]._Query__kind
+        self.kind = queries[0].kind
 
-    def Run(self, limit=None, offset=None):
+    def fetch(self, limit=None, offset=None):
         """
             Here are the options:
 
@@ -299,87 +304,64 @@ class QueryByKeys(object):
             2. Multikey projection, async MultiQueries with ancestors chained
             3. Full select, datastore get
         """
-        opts = self.queries[0]._Query__query_options
-        key_count = len(self.queries_by_key)
+        base_query = self.queries[0]
 
         is_projection = False
 
-        max_cache_count = getattr(
-            settings, "DJANGAE_CACHE_MAX_ENTITY_COUNT", DEFAULT_MAX_ENTITY_COUNT
-        )
-
-        cache_results = True
         results = None
-        if key_count == 1:
-            # FIXME: Potentially could use get_multi in memcache and the make a query
-            # for whatever remains
-            key = self.queries_by_key.keys()[0]
-            result = caching.get_from_cache_by_key(key)
-            if result is not None:
-                results = [result]
-                cache_results = False  # Don't update cache, we just got it from there
 
-        if results is None:
-            if opts.projection and self.can_multi_query:
-                is_projection = True
-                cache_results = False  # Don't cache projection results!
+        if base_query.projection and self.can_multi_query:
+            is_projection = True
 
-                # If we can multi-query in a single query, we do so using a number of
-                # ancestor queries (to stay consistent) otherwise, we just do a
-                # datastore Get, but this will return extra data over the RPC
-                to_fetch = (offset or 0) + limit if limit else None
-                additional_cols = set([x[0] for x in self.ordering if x[0] not in opts.projection])
+            # If we can multi-query in a single query, we do so using a number of
+            # ancestor queries (to stay consistent) otherwise, we just do a
+            # datastore Get, but this will return extra data over the RPC
+            to_fetch = (offset or 0) + limit if limit else None
+            additional_cols = set([x[0] for x in self.ordering if x[0] not in base_query.projection])
 
-                multi_query = []
-                orderings = self.queries[0]._Query__orderings
-                for key, queries in self.queries_by_key.items():
-                    for query in queries:
-                        if additional_cols:
-                            # We need to include additional orderings in the projection so that we can
-                            # sort them in memory. Annoyingly that means reinstantiating the queries
-                            query = rpc.Query(
-                                kind=query._Query__kind,
-                                filters=query,
-                                projection=list(opts.projection).extend(list(additional_cols)),
-                                namespace=self.namespace,
-                            )
+            multi_query = []
+            orderings = base_query.order
+            for key, queries in self.queries_by_key.items():
+                for query in queries:
+                    if additional_cols:
+                        # We need to include additional orderings in the projection so that we can
+                        # sort them in memory. Annoyingly that means reinstantiating the queries
+                        query = rpc.Query(
+                            kind=query._Query__kind,
+                            filters=query,
+                            projection=list(base_query.projection).extend(list(additional_cols)),
+                            namespace=self.namespace,
+                        )
 
-                        query.Ancestor(key)  # Make this an ancestor query
-                        multi_query.append(query)
+                    query.ancestor = key  # Make this an ancestor query
+                    multi_query.append(query)
 
-                if len(multi_query) == 1:
-                    results = multi_query[0].Run(limit=to_fetch)
-                else:
-                    results = AsyncMultiQuery(multi_query, orderings).Run(limit=to_fetch)
+            if len(multi_query) == 1:
+                results = multi_query[0].fetch(limit=to_fetch)
             else:
-                results = rpc.Get(self.queries_by_key.keys())
+                results = AsyncMultiQuery(multi_query, orderings).Run(limit=to_fetch)
+        else:
+            results = rpc.Get(self.queries_by_key.keys())
 
         def iter_results(results):
             returned = 0
             # This is safe, because Django is fetching all results any way :(
             sorted_results = sorted(
                 results,
-                cmp=partial(utils.django_ordering_comparison, self.ordering)
+                key=cmp_to_key(partial(django_ordering_comparison, self.ordering))
             )
             sorted_results = [result for result in sorted_results if result is not None]
-            if cache_results and sorted_results:
-                caching.add_entities_to_cache(
-                    self.model,
-                    sorted_results[:max_cache_count],
-                    caching.CachingSituation.DATASTORE_GET,
-                    self.namespace,
-                )
 
             for result in sorted_results:
                 if is_projection:
-                    entity_matches_query = True
+                    matches_query = True
                 else:
-                    entity_matches_query = any(
-                        utils.entity_matches_query(result, qry)
+                    matches_query = any(
+                        entity_matches_query(result, qry)
                         for qry in self.queries_by_key[result.key()]
                     )
 
-                if not entity_matches_query:
+                if not matches_query:
                     continue
 
                 if offset and returned < offset:
@@ -388,7 +370,9 @@ class QueryByKeys(object):
                     continue
                 else:
 
-                    yield _convert_entity_based_on_query_options(result, opts)
+                    yield _convert_entity_based_on_query_options(
+                        result, base_query.keys_only, base_query.projection
+                    )
 
                     returned += 1
 
@@ -397,9 +381,6 @@ class QueryByKeys(object):
                         break
 
         return iter_results(results)
-
-    def Count(self, limit, offset):
-        return len([x for x in self.Run(limit, offset)])
 
 
 class NoOpQuery(object):

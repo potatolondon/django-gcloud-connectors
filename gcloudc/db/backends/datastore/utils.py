@@ -1,6 +1,3 @@
-
-import collections
-import functools
 from datetime import datetime
 from decimal import Decimal
 from itertools import chain
@@ -9,47 +6,17 @@ from django.apps import apps
 from django.conf import settings
 from django.db import IntegrityError
 from django.db.backends.utils import format_number
-from django.utils import (
-    six,
-    timezone,
-)
+from django.utils import timezone
+from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.key import Key
 from google.cloud.datastore.query import Query
-from google.cloud.datastore.entity import Entity
+
+from gcloudc.utils import memoized
 
 try:
     from django.db.models.expressions import BaseExpression
 except ImportError:
     from django.db.models.expressions import ExpressionNode as BaseExpression
-
-
-class memoized(object):
-    def __init__(self, func, *args):
-        self.func = func
-        self.cache = {}
-        self.args = args
-
-    def __call__(self, *args):
-        args = self.args or args
-        if not isinstance(args, collections.Hashable):
-            # uncacheable. a list, for instance.
-            # better to not cache than blow up.
-            return self.func(*args)
-
-        if args in self.cache:
-            return self.cache[args]
-        else:
-            value = self.func(*args)
-            self.cache[args] = value
-            return value
-
-    def __repr__(self):
-        '''Return the function's docstring.'''
-        return self.func.__doc__
-
-    def __get__(self, obj, objtype):
-        '''Support instance methods.'''
-        return functools.partial(self.__call__, obj)
 
 
 def make_timezone_naive(value):
@@ -493,3 +460,28 @@ def ensure_datetime(value):
     if isinstance(value, long):
         return datetime.fromtimestamp(value / 1e6)
     return value
+
+
+def _has_filter(query, col_and_operator):
+    """
+        query: A Cloud Datastore Query object
+        col_and_operator: tuple of column name and operator
+    """
+    for col, operator, value in query.filters:
+        if (col, operator) == tuple(col_and_operator):
+            return True
+
+    return False
+
+
+def _get_filter(query, col_and_operator):
+    """
+        query: A Cloud Datastore Query object
+        col_and_operator: tuple of column name and operator
+    """
+    for col, operator, value in query.filters:
+        if (col, operator) == tuple(col_and_operator):
+            return value
+
+    return None
+

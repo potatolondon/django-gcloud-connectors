@@ -1,32 +1,32 @@
 import logging
-from ..query import Query, WhereNode
 
 from django.core.exceptions import FieldError
-from django.db.models.fields import FieldDoesNotExist
 from django.db import NotSupportedError
-from django.db.models.expressions import Star
-from django.db.models.sql.datastructures import EmptyResultSet
-from django.db.models.query import QuerySet
 from django.db.models.aggregates import Aggregate
+from django.db.models.expressions import Star
+from django.db.models.fields import FieldDoesNotExist
+from django.db.models.query import (
+    FlatValuesListIterable,
+    QuerySet,
+)
+from django.db.models.sql.datastructures import EmptyResultSet
 from django.db.models.sql.query import Query as DjangoQuery
 
-
-try:
-    from django.db.models.query import FlatValuesListIterable
-except ImportError:
-    # Django 1.8
-    class FlatValuesListIterable(object):
-        pass
-
-try:
-    from django.db.models.query import ValuesListQuerySet
-except ImportError:
-    # Django >= 1.9
-    class ValuesListQuerySet(object):
-        pass
-
-
+from ..query import (
+    Query,
+    WhereNode,
+)
 from ..utils import get_top_concrete_parent
+
+
+# Django >= 1.9
+class ValuesListQuerySet(object):
+    pass
+
+
+def _iterable(x):
+    # Returns True if x is iterable and not a string type
+    return hasattr(x, "__iter__") and not isinstance(x, (str, bytes))
 
 
 logger = logging.getLogger(__name__)
@@ -45,9 +45,9 @@ def _get_concrete_fields_with_model(model):
         (f, f.model if f.model != model else None)
         for f in model._meta.get_fields()
         if f.concrete and (
-            not f.is_relation
-            or f.one_to_one
-            or (f.many_to_one and f.related_model)
+            not f.is_relation or
+            f.one_to_one or
+            (f.many_to_one and f.related_model)
         )
     ]
 
@@ -291,16 +291,16 @@ class BaseParser(object):
         else:
             rhs = node.rhs
 
-        was_iter = hasattr(node.rhs, "__iter__")
+        was_iter = _iterable(node.rhs)
         rhs = node.get_db_prep_lookup(rhs, connection)[-1]
-        if rhs and not was_iter and hasattr(rhs, "__iter__"):
+        if rhs and not was_iter and _iterable(rhs):
             rhs = rhs[0]
 
         new_node.set_leaf(
             lhs,
             operator,
             rhs,
-            is_pk_field=field==model._meta.pk,
+            is_pk_field=field == model._meta.pk,
             negated=negated,
             lookup_name=node.lookup_name,
             namespace=connection.ops.connection.settings_dict.get("NAMESPACE"),

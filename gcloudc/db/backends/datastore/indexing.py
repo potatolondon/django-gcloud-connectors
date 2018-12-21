@@ -15,7 +15,6 @@ from django.db import models
 from django.utils import six
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
-
 from .utils import get_top_concrete_parent
 
 logger = logging.getLogger(__name__)
@@ -152,7 +151,7 @@ def special_index_exists(model_class, field_name, index_type):
 
 
 def special_indexes_for_model(model_class):
-    classes = [model_class] + model_class._meta.parents.keys()
+    classes = [model_class] + [x for x in model_class._meta.parents.keys()]
 
     result = {}
     for klass in classes:
@@ -286,7 +285,8 @@ class StringIndexerMixin(object):
     )
 
     def handles(self, field, operator):
-        from djangae.fields import iterable
+        from gcloudc.db.models.fields import iterable
+
         try:
             # Make sure the operator is in there
             operator.split("__").index(self.OPERATOR)
@@ -305,7 +305,8 @@ class StringIndexerMixin(object):
 
 class DateIndexerMixin(object):
     def handles(self, field, operator):
-        from djangae.fields import iterable
+        from gcloudc.db.models.fields import iterable
+
         DATE_FIELDS = (
             models.DateField,
             models.DateTimeField
@@ -327,7 +328,7 @@ class DateIndexerMixin(object):
 
 class TimeIndexerMixin(object):
     def handles(self, field, operator):
-        from djangae.fields import iterable
+        from gcloudc.db.models.fields import iterable
 
         TIME_FIELDS = (
             models.TimeField,

@@ -100,6 +100,9 @@ class WhereNode(object):
             self, column, operator, value, is_pk_field, negated, lookup_name, namespace,
             target_field=None):
 
+        # We need access to the Datastore client to access the Key factory
+        gclient = connections[self.using].connection.gclient
+
         assert column
         assert operator
         assert isinstance(is_pk_field, bool)
@@ -122,7 +125,7 @@ class WhereNode(object):
 
             if isinstance(value, (list, tuple)):
                 value = [
-                    rpc.Key.from_path(table, x, namespace=namespace)
+                    gclient.key(table, x, namespace=namespace)
                     for x in value if x
                 ]
             else:
@@ -143,10 +146,10 @@ class WhereNode(object):
                     else:
                         value = "\0"
 
-                    value = rpc.Key.from_path(table, value, namespace=namespace)
+                    value = gclient.key(table, value, namespace=namespace)
                     operator = "gte"
                 else:
-                    value = rpc.Key.from_path(table, value, namespace=namespace)
+                    value = gclient.key(table, value, namespace=namespace)
             column = "__key__"
 
         # Do any special index conversions necessary to perform this lookup

@@ -24,9 +24,13 @@ class Transaction(object):
             transaction commits, that's too late!
 
             This is a hack, it might be the only hack we can do :(
+
+            Note. Even though the Datastore can handle negative IDs (it's a signed
+            64 bit integer) the default allocate never does, and also, this breaks
+            Django URL regexes etc. So like the allocator we just do 32 bit ones.
         """
-        unsigned = uuid.uuid4().int & (1 << 64) - 1
-        return unsigned - (2 ** 64)
+        unsigned = uuid.uuid4().int & (1 << 32) - 1
+        return unsigned
 
     def put(self, entity):
         putter = (
@@ -35,7 +39,10 @@ class Transaction(object):
             else self._connection.gclient.put
         )
 
-        return putter(entity)
+        putter(entity)
+
+        assert(entity.key)
+        return entity.key
 
     def query(self, *args, **kwargs):
         return self._connection.gclient.query(*args, **kwargs)
