@@ -400,11 +400,8 @@ class QueryByKeys(object):
 
 
 class NoOpQuery(object):
-    def Run(self, limit, offset):
+    def fetch(self, limit, offset):
         return []
-
-    def Count(self, limit, offset):
-        return 0
 
 
 class UniqueQuery(object):
@@ -426,7 +423,7 @@ class UniqueQuery(object):
     def keys(self):
         return self._gae_query.keys()
 
-    def Run(self, limit, offset):
+    def fetch(self, limit, offset):
         opts = self._gae_query._Query__query_options
         if opts.keys_only or opts.projection:
             return self._gae_query.Run(limit=limit, offset=offset)
@@ -458,6 +455,3 @@ class UniqueQuery(object):
             return iter(ret)
 
         return iter([ret])
-
-    def Count(self, limit, offset):
-        return sum(1 for x in self.Run(limit, offset))
