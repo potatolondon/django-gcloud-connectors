@@ -35,10 +35,8 @@ class BasicTest(TestCase):
         self.assertEqual(instance.field1, instance2.field1)
 
         # Non-existent PK
-        instance2 = BasicTestModel.objects.filter(pk=999)[0]
-
-        self.assertEqual(instance, instance2)
-        self.assertEqual(instance.field1, instance2.field1)
+        instance3 = BasicTestModel.objects.filter(pk=999).first()
+        self.assertIsNone(instance3)
 
         # Unique field
         instance2 = BasicTestModel.objects.filter(field2=1998)[0]

@@ -398,8 +398,9 @@ class BaseParser(object):
 
             if len(cross_table_ordering):
                 log_once(
-                    logger.warning if environment.is_development_environment() else logger.debug,
-                    "The following orderings were ignored as cross-table orderings are not supported on the Datastore: %s", cross_table_ordering
+                    logger.warning,
+                    "The following orderings were ignored as cross-table orderings"
+                    " are not supported on the Datastore: %s", cross_table_ordering
                 )
 
             result = new_result
@@ -424,7 +425,7 @@ class BaseParser(object):
             elif isinstance(col, F):
                 col = col.name
 
-            if isinstance(col, (int, long)):
+            if isinstance(col, int):
                 # If you do a Dates query, the ordering is set to [1] or [-1]... which is weird
                 # I think it's to select the column number but then there is only 1 column so
                 # unless the ordinal is one-based I have no idea. So basically if it's an integer
@@ -497,7 +498,8 @@ class BaseParser(object):
                             pass
 
                     available = opts.get_all_field_names()
-                    raise FieldError("Cannot resolve keyword %r into field. "
+                    raise FieldError(
+                        "Cannot resolve keyword %r into field. "
                         "Choices are: %s" % (col, ", ".join(available))
                     )
 
@@ -514,8 +516,9 @@ class BaseParser(object):
         if len(final) != len(result):
             diff = set(result) - set(final)
             log_once(
-                logger.warning if environment.is_development_environment() else logger.debug,
-                "The following orderings were ignored as cross-table and random orderings are not supported on the Datastore: %s", diff
+                logger.warning,
+                "The following orderings were ignored as cross-table and random orderings"
+                " are not supported on the Datastore: %s", diff
             )
 
         return final

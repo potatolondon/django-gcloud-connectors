@@ -13,6 +13,8 @@ from google.cloud.datastore.query import Query
 
 from gcloudc.utils import memoized
 
+from .query_utils import get_filter
+
 try:
     from django.db.models.expressions import BaseExpression
 except ImportError:
@@ -100,7 +102,7 @@ def get_prepared_db_value(connection, instance, field, raw=False):
         # We can't actually support F expressions on the datastore, but we can simulate
         # them, evaluating the expression in place.
 
-        #TODO: For saves and updates we should raise a Warning. When evaluated in a filter
+        # TODO: For saves and updates we should raise a Warning. When evaluated in a filter
         # we should raise an Error
         value = evaluate_expression(value, instance, connection)
 
@@ -198,8 +200,10 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
             value = connection.ops.value_for_db(_field.get_default(), _field)
 
         if check_null and (not _field.null and not _field.primary_key) and value is None:
-            raise IntegrityError("You can't set %s (a non-nullable "
-                                     "field) to None!" % _field.name)
+            raise IntegrityError(
+                "You can't set %s (a non-nullable field) to None!" %
+                _field.name
+            )
 
         is_primary_key = False
         if _field.primary_key and _field.model == inheritance_root:
@@ -415,7 +419,7 @@ def entity_matches_query(entity, query):
                 query_value = query.kind
             else:
                 ent_attr = entity.get(ent_attr)
-                query_value = _get_filter(query, (ent_attr, op))
+                query_value = get_filter(query, (ent_attr, op))
 
             if not isinstance(query_value, (list, tuple)):
                 query_values = [query_value]
@@ -454,28 +458,3 @@ def ensure_datetime(value):
     if isinstance(value, long):
         return datetime.fromtimestamp(value / 1e6)
     return value
-
-
-def _has_filter(query, col_and_operator):
-    """
-        query: A Cloud Datastore Query object
-        col_and_operator: tuple of column name and operator
-    """
-    for col, operator, value in query.filters:
-        if (col, operator) == tuple(col_and_operator):
-            return True
-
-    return False
-
-
-def _get_filter(query, col_and_operator):
-    """
-        query: A Cloud Datastore Query object
-        col_and_operator: tuple of column name and operator
-    """
-    for col, operator, value in query.filters:
-        if (col, operator) == tuple(col_and_operator):
-            return value
-
-    return None
-

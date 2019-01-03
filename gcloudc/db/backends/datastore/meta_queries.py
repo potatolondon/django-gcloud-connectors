@@ -1,6 +1,9 @@
 import copy
 import threading
-from functools import partial, cmp_to_key
+from functools import (
+    cmp_to_key,
+    partial,
+)
 from itertools import groupby
 
 from django.conf import settings
@@ -9,10 +12,13 @@ from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
     caching,
 )
+from .query_utils import (
+    get_filter,
+    is_keys_only,
+)
 from .utils import (
-    _get_filter,
     django_ordering_comparison,
-    entity_matches_query
+    entity_matches_query,
 )
 
 
@@ -276,7 +282,7 @@ class QueryByKeys(object):
         # `namespace` is passed for explicit niceness (mostly so that we don't have to assume that
         # all the keys belong to the same namespace, even though they will).
         def _get_key(query):
-            result = _get_filter(query, ("__key__", "="))
+            result = get_filter(query, ("__key__", "="))
             return result
 
         self.connection = connection
@@ -373,9 +379,8 @@ class QueryByKeys(object):
                     returned += 1
                     continue
                 else:
-
                     yield _convert_entity_based_on_query_options(
-                        result, base_query.keys_only, base_query.projection
+                        result, is_keys_only(base_query), base_query.projection
                     )
 
                     returned += 1

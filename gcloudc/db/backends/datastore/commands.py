@@ -14,8 +14,8 @@ from django.utils.encoding import (
     python_2_unicode_compatible,
 )
 from google.cloud.datastore.entity import Entity
-from google.cloud.datastore.query import Query
 from google.cloud.datastore.key import Key
+from google.cloud.datastore.query import Query
 
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
@@ -27,6 +27,10 @@ from .dbapi import NotSupportedError
 from .dnf import normalize_query
 from .formatting import generate_sql_representation
 from .query import transform_query
+from .query_utils import (
+    get_filter,
+    has_filter,
+)
 from .unique_utils import query_is_unique
 from .utils import (
     MockInstance,
@@ -35,8 +39,6 @@ from .utils import (
     get_datastore_key,
     get_field_from_column,
     has_concrete_parents,
-    _get_filter,
-    _has_filter
 )
 
 logger = logging.getLogger(__name__)
@@ -433,9 +435,9 @@ class SelectCommand(object):
 
                 # If there is already a value for this lookup, we need to make the
                 # value a list and append the new entry
-                filter_value = _get_filter(query, lookup)
+                filter_value = get_filter(query, lookup)
                 if (
-                    _has_filter(query, lookup) and
+                    has_filter(query, lookup) and
                     not isinstance(filter_value, (list, tuple)) and
                     filter_value != value
                 ):
