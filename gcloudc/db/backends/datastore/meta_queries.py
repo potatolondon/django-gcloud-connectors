@@ -7,12 +7,14 @@ from functools import (
 from itertools import groupby
 
 from django.conf import settings
+from google.cloud.datastore.key import Key
 
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
     caching,
 )
 from .query_utils import (
+    compare_keys,
     get_filter,
     is_keys_only,
 )
@@ -35,7 +37,7 @@ class AsyncMultiQuery(object):
     THREAD_COUNT = 8
 
     def __init__(self, queries, orderings):
-        self._queries = queries
+        self._queries = [copy.copy(x) for x in queries]
         self._orderings = orderings
         self._min_max_cache = {}
 
@@ -43,6 +45,12 @@ class AsyncMultiQuery(object):
         # Which allows you to manipulate the options. Recommend this is set/unset
         # in a try/finally
         self._query_decorator = None
+        self._keys_only = False
+
+    def keys_only(self):
+        self._keys_only = True
+        for query in self._queries:
+            query.keys_only()
 
     def _spawn_thread(self, i, query, result_queues, **query_run_args):
         """
@@ -66,6 +74,8 @@ class AsyncMultiQuery(object):
             async queries like Google's multiquery does.
         """
 
+        keys_only = self._keys_only
+
         class Thread(threading.Thread):
             def __init__(self, query, *args, **kwargs):
                 self.query = query
@@ -75,7 +85,10 @@ class AsyncMultiQuery(object):
             def run(self):
                 # Evaluate the result set in the thread, but return an iterator
                 # so we can change this if necessary without breaking assumptions elsewhere
-                result_queues[i] = iter([x for x in query.Run(**query_run_args)])
+                result_queues[i] = (
+                    x.key if keys_only else x
+                    for x in self.query.fetch(**query_run_args)
+                )
                 self.results_fetched = True
 
         if self._query_decorator:
@@ -104,7 +117,7 @@ class AsyncMultiQuery(object):
             # Iterate while we have a full thread list
             while len(threads) >= self.THREAD_COUNT:
                 try:
-                    complete = (x for x in threads if x.results_fetched).next()
+                    complete = next(x for x in threads if x.results_fetched)
                 except StopIteration:
                     # No threads available, continue waiting
                     continue
@@ -121,17 +134,20 @@ class AsyncMultiQuery(object):
         return result_queues
 
     def _compare_entities(self, lhs, rhs):
-        if all([isinstance(x, rpc.Key) for x in (lhs, rhs)]):
-            return cmp(lhs, rhs)
+        def cmp(a, b):
+            return (a > b) - (a < b)
 
-        def get_extreme_if_list_property(entity_key, column, value, order):
+        if isinstance(lhs, Key) and isinstance(rhs, Key):
+            return compare_keys(lhs, rhs)
+
+        def get_extreme_if_list_property(entity_key, column, value, descending):
             if not isinstance(value, list):
                 return value
 
             if (entity_key, column) in self._min_max_cache:
                 return self._min_max_cache[(entity_key, column)]
 
-            if order == rpc.Query.DESCENDING:
+            if descending:
                 value = min(value)
             else:
                 value = max(value)
@@ -140,39 +156,29 @@ class AsyncMultiQuery(object):
         if not lhs:
             return cmp(lhs, rhs)
 
-        for column, order in self._orderings:
-            lhs_value = lhs.key() if column == "__key__" else lhs[column]
-            rhs_value = rhs.key() if column == "__key__" else rhs[column]
+        for column in self._orderings:
+            descending = column.startswith("-")
+            column = column.lstrip("-")
 
-            lhs_value = get_extreme_if_list_property(lhs.key(), column, lhs_value, order)
-            rhs_value = get_extreme_if_list_property(lhs.key(), column, rhs_value, order)
+            lhs_value = lhs.key if column == "__key__" else lhs[column]
+            rhs_value = rhs.key if column == "__key__" else rhs[column]
 
-            result = cmp(lhs_value, rhs_value)
+            lhs_value = get_extreme_if_list_property(lhs.key, column, lhs_value, descending)
+            rhs_value = get_extreme_if_list_property(lhs.key, column, rhs_value, descending)
 
-            if order == rpc.Query.DESCENDING:
+            if isinstance(lhs_value, Key) and isinstance(rhs_value, Key):
+                result = compare_keys(lhs_value, rhs_value)
+            else:
+                result = cmp(lhs_value, rhs_value)
+
+            if descending:
                 result = -result
             if result:
                 return result
 
-        return cmp(lhs.key(), rhs.key())
+        return compare_keys(lhs.key, rhs.key)
 
-    def Count(self, **kwargs):
-        def query_decorator(query):
-            # Force keys_only
-            # we copy to prevent changing the original query
-            # unexpectedly
-            query = copy.deepcopy(query)
-            query._Query__query_options = QueryOptions(keys_only=True)
-
-            return query
-
-        try:
-            self._query_decorator = query_decorator
-            return len([x for x in self.Run(**kwargs)])
-        finally:
-            self._query_decorator = None
-
-    def Run(self, offset=None, limit=None):
+    def fetch(self, offset=None, limit=None):
         """
             Returns an iterator through the result set.
 
@@ -196,7 +202,7 @@ class AsyncMultiQuery(object):
         next_entries = [None] * len(results)
         for i, queue in enumerate(results):
             try:
-                next_entries[i] = results[i].next()
+                next_entries[i] = next(results[i])
             except StopIteration:
                 next_entries[i] = None
 
@@ -218,7 +224,7 @@ class AsyncMultiQuery(object):
                 # Move the queue along if we found the entry there
                 if lowest is not None:
                     try:
-                        next_entries[idx] = results[idx].next()
+                        next_entries[idx] = next(results[idx])
                     except StopIteration:
                         next_entries[idx] = None
 
@@ -233,7 +239,8 @@ class AsyncMultiQuery(object):
 
             next_key = (
                 next_entity
-                if isinstance(next_entity, rpc.Key) else next_entity.key()
+                if isinstance(next_entity, Key)
+                else next_entity.key
             )
 
             # Make sure we haven't seen this result before before yielding
