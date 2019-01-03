@@ -1,10 +1,12 @@
 from datetime import datetime
 import os
-import socket
+import logging
+import time
 import subprocess
 from django.core.exceptions import ImproperlyConfigured
 from django.conf import settings
-
+from urllib.request import urlopen
+from urllib.error import HTTPError
 
 _BASE_COMMAND = "gcloud beta emulators datastore start --quiet --project=test".split()
 _DEFAULT_PORT = 9090
@@ -24,6 +26,7 @@ class CloudDatastoreRunner:
         try:
             if kwargs.get("datastore", True):
                 self._start_emulator(**kwargs)
+
             super().execute(*args, **kwargs)
         finally:
             self._stop_emulator()
@@ -45,17 +48,26 @@ class CloudDatastoreRunner:
         start = datetime.now()
 
         print("Waiting for Cloud Datastore Emulator...")
+        time.sleep(1)
 
         while True:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            result = sock.connect_ex(('127.0.0.1', _DEFAULT_PORT))
-            if result == 0:
+            try:
+                response = urlopen("http://127.0.0.1:%s/" % _DEFAULT_PORT)
+            except HTTPError:
+                time.sleep(3)
+                logging.exception(
+                    "Error connecting to the Cloud Datastore Emulator. Retrying..."
+                )
+
+            if response.status == 200:
                 break
 
             if (datetime.now() - start).total_seconds() > TIMEOUT:
                 raise RuntimeError(
                     "Unable to start Cloud Datastore Emulator. Please check the logs."
                 )
+
+            time.sleep(1)
 
     def _start_emulator(self, **kwargs):
         print("Starting Cloud Datastore Emulator")
