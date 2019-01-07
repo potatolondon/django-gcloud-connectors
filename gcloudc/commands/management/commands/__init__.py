@@ -38,7 +38,7 @@ class CloudDatastoreRunner:
             self._stop_emulator()
 
     def _check_gcloud_components(self):
-        finished_process = subprocess.run(_COMPONENTS_LIST_COMMAND, capture_output=True, text=True)
+        finished_process = subprocess.run(_COMPONENTS_LIST_COMMAND, stdout=subprocess.PIPE, encoding='utf-8')
         installed_components = \
             set([cp['id'] for cp in json.loads(finished_process.stdout) if cp['current_version_string'] is not None])
 
