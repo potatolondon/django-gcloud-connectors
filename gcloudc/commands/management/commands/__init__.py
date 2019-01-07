@@ -3,10 +3,15 @@ import os
 import logging
 import time
 import subprocess
+import json
 from django.core.exceptions import ImproperlyConfigured
 from django.conf import settings
 from urllib.request import urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
+
+
+_COMPONENTS_LIST_COMMAND = "gcloud components list --format=json".split()
+_REQUIRED_COMPONENTS = set(['app-engine-python', 'beta', 'cloud-datastore-emulator', 'core'])
 
 _BASE_COMMAND = "gcloud beta emulators datastore start --quiet --project=test".split()
 _DEFAULT_PORT = 9090
@@ -25,11 +30,25 @@ class CloudDatastoreRunner:
     def execute(self, *args, **kwargs):
         try:
             if kwargs.get("datastore", True):
+                self._check_gcloud_components()
                 self._start_emulator(**kwargs)
 
             super().execute(*args, **kwargs)
         finally:
             self._stop_emulator()
+
+    def _check_gcloud_components(self):
+        finished_process = subprocess.run(_COMPONENTS_LIST_COMMAND, capture_output=True, text=True)
+        installed_components = \
+            set([cp['id'] for cp in json.loads(finished_process.stdout) if cp['current_version_string'] is not None])
+
+        if not _REQUIRED_COMPONENTS.issubset(installed_components):
+            raise RuntimeError(
+                "Missing Google Cloud SDK component(s): {}\n"
+                "Please run `gcloud components install` to install missing components.".format(
+                    ", ".join(_REQUIRED_COMPONENTS - installed_components)
+                )
+            )
 
     def _get_args(self, **kwargs):
         BASE_DIR = getattr(settings, "BASE_DIR", None)
@@ -53,7 +72,7 @@ class CloudDatastoreRunner:
         while True:
             try:
                 response = urlopen("http://127.0.0.1:%s/" % _DEFAULT_PORT)
-            except HTTPError:
+            except (HTTPError, URLError):
                 time.sleep(3)
                 logging.exception(
                     "Error connecting to the Cloud Datastore Emulator. Retrying..."
