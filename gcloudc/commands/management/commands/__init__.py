@@ -77,6 +77,7 @@ class CloudDatastoreRunner:
                 logging.exception(
                     "Error connecting to the Cloud Datastore Emulator. Retrying..."
                 )
+                continue
 
             if response.status == 200:
                 break
