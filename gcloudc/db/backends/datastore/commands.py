@@ -630,11 +630,18 @@ class FlushCommand(object):
             results = [x.key for x in query.fetch()]
 
 
-def reserve_id(kind, id_or_name, namespace):
-    #FIXME: This should use connection.client.allocate_ids
-    from google.appengine.api.datastore import _GetConnection
-    key = rpc.Key.from_path(kind, id_or_name, namespace=namespace)
-    _GetConnection()._reserve_keys([key])
+def reserve_id(connection, kind, id_or_name, namespace):
+    if not isinstance(id_or_name, int):
+        # Nothing to do if the ID is a string, no-need to reserve that
+        return
+
+    # https://github.com/googleapis/google-cloud-python/issues/7111
+    gclient = connection.connection.gclient
+    reserve_ids = gclient._datastore_api
+    reserve_ids(
+        project=gclient.project,
+        keys=[gclient.key(kind, id_or_name, namespace=namespace).to_protobuf()]
+    )
 
 
 class BulkInsertError(IntegrityError, NotSupportedError):
@@ -736,7 +743,7 @@ class InsertCommand(object):
                             raise NotSupportedError("Datastore ids cannot start with __. Id was %s" % id_or_name)
 
                         # Notify App Engine of any keys we're specifying intentionally
-                        reserve_id(key.kind, key.id_or_name, self.namespace)
+                        reserve_id(self.connection, key.kind, key.id_or_name, self.namespace)
 
                 results = perform_insert(entities)
 
