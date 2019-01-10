@@ -728,15 +728,15 @@ class InsertCommand(object):
             def txn():
                 for key in keys:
                     if check_existence and key is not None:
-                        if utils.key_exists(key):
+                        if utils.key_exists(self.connection, key):
                             raise IntegrityError("Tried to INSERT with existing key")
 
-                        id_or_name = key.id_or_name()
+                        id_or_name = key.id_or_name
                         if isinstance(id_or_name, six.string_types) and id_or_name.startswith("__"):
                             raise NotSupportedError("Datastore ids cannot start with __. Id was %s" % id_or_name)
 
                         # Notify App Engine of any keys we're specifying intentionally
-                        reserve_id(key.kind(), key.id_or_name(), self.namespace)
+                        reserve_id(key.kind, key.id_or_name, self.namespace)
 
                 results = perform_insert(entities)
 

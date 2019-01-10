@@ -320,10 +320,14 @@ class MockInstance(object):
         raise AttributeError(attr)
 
 
-def key_exists(key):
-    qry = Query(keys_only=True, namespace=key.namespace())
-    qry.Ancestor(key)
-    return qry.Count(limit=1) > 0
+def key_exists(connection, key):
+    from . import transaction
+    qry = transaction._rpc(connection).query(
+        namespace=key.namespace,
+        ancestor=key
+    )
+    qry.keys_only()
+    return bool([x for x in qry.fetch(1)])
 
 
 # Null-friendly comparison functions
