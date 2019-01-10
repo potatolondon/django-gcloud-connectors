@@ -285,12 +285,12 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
     return entity, descendents
 
 
-def get_datastore_key(model, pk, namespace):
+def get_datastore_key(connection, model, pk):
     """ Return a datastore.Key for the given model and primary key.
     """
-
+    factory = connection.connection.gclient.key
     kind = get_top_concrete_parent(model)._meta.db_table
-    return Key.from_path(kind, pk, namespace=namespace)
+    return factory(kind, pk, namespace=connection.namespace)
 
 
 class MockInstance(object):

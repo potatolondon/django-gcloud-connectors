@@ -665,7 +665,7 @@ class InsertCommand(object):
                     self.connection
                 )
                 self.included_keys.append(
-                    get_datastore_key(self.model, value, self.namespace)
+                    get_datastore_key(self.connection, self.model, value)
                     if value else None
                 )
 
