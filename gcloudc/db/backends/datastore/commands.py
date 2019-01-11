@@ -490,8 +490,10 @@ class SelectCommand(object):
         # out too many! These are again limited back to the original request limit
         # while we're processing the results later
         # Apply the namespace before excluding
+        rpc = transaction._rpc(self.connection)
+
         excluded_pks = [
-            rpc.Key.from_path(x.kind(), x.id_or_name(), namespace=self.namespace)
+            rpc.key(x.kind, x.id_or_name, namespace=self.namespace)
             for x in self.query.excluded_pks
         ]
 

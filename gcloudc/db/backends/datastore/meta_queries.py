@@ -292,12 +292,15 @@ class QueryByKeys(object):
             result = get_filter(query, ("__key__", "="))
             return result
 
+        def compare_queries(lhs, rhs):
+            return compare_keys(_get_key(lhs), _get_key(rhs))
+
         self.connection = connection
         self.model = model
         self.namespace = namespace
 
         # groupby requires that the iterable is sorted by the given key before grouping
-        self.queries = sorted(queries, key=_get_key)
+        self.queries = sorted(queries, key=cmp_to_key(compare_queries))
         self.query_count = len(self.queries)
         self.queries_by_key = {a: list(b) for a, b in groupby(self.queries, _get_key)}
 

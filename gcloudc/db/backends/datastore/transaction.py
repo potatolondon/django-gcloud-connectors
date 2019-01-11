@@ -44,6 +44,9 @@ class Transaction(object):
         assert(entity.key)
         return entity.key
 
+    def key(self, *args, **kwargs):
+        return self._connection.gclient.key(*args, **kwargs)
+
     def query(self, *args, **kwargs):
         return self._connection.gclient.query(*args, **kwargs)
 

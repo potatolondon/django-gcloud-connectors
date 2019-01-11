@@ -654,7 +654,7 @@ class Query(object):
         result["order_by"] = self.order_by
         result["low_mark"] = self.low_mark
         result["high_mark"] = self.high_mark
-        result["excluded_pks"] = map(str, self.excluded_pks)
+        result["excluded_pks"] = list(map(str, self.excluded_pks))
 
         where = []
 
