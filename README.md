@@ -1,5 +1,7 @@
 # Django GCloud Connectors
 
+**WARNING: This is very much a work in progress, is unstable, and not ready for use**
+
 The aim of this project is to create Django database connectors for Google Cloud. Currently
 it contains a connector for the Google Cloud Datastore (Firestore in Datastore mode) but in future
 it may also house a Firestore connector, or even a MemoryStore one.
