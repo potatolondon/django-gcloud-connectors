@@ -230,7 +230,10 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
 
             unindex = False
             try:
-                values = indexer.prep_value_for_database(value, index, model=model, column=field.column)
+                values = indexer.prep_value_for_database(
+                    value, index,
+                    model=model, column=field.column, connection=connection
+                )
             except IgnoreForIndexing as e:
                 # We mark this value as being wiped out for indexing
                 unindex = True
@@ -365,14 +368,17 @@ def django_ordering_comparison(ordering, lhs, rhs):
     ASCENDING = 1
     DESCENDING = 2
 
-    for order, direction in ordering:
+    for order in ordering:
+        direction = DESCENDING if order.startswith("-") else ASCENDING
+        order = order.lstrip("-")
+
         if lhs is not None:
-            lhs_value = lhs.key() if order == "__key__" else lhs.get(order)
+            lhs_value = lhs.key if order == "__key__" else lhs.get(order)
         else:
             lhs_value = None
 
         if rhs is not None:
-            rhs_value = rhs.key() if order == "__key__" else rhs.get(order)
+            rhs_value = rhs.key if order == "__key__" else rhs.get(order)
         else:
             rhs_value = None
 

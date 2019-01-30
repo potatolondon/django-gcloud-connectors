@@ -160,7 +160,7 @@ class WhereNode(object):
                 column = model._meta.pk.column
                 value = unicode(value.id_or_name())
 
-            add_special_index(target_field.model, column, special_indexer, operator, value)
+            add_special_index(connections[self.using], target_field.model, column, special_indexer, operator, value)
             index_type = special_indexer.prepare_index_type(operator, value)
             value = special_indexer.prep_value_for_query(
                 value,

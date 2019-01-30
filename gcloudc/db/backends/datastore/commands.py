@@ -719,16 +719,18 @@ class InsertCommand(object):
 
                 if descendents:
                     for i, descendent in enumerate(descendents):
-                        descendents[i] = Entity(
-                            descendent.kind(),
+                        key = transaction._rpc(self.connection).key(
+                            descendent.kind,
+                            descendent.key.id_or_name,
                             parent=new_key,
-                            namespace=new_key.namespace(),
-                            id=descendent.key().id() or None,
-                            name=descendent.key().name() or None
+                            namespace=new_key.namespace
                         )
+                        descendents[i] = Entity(key)
                         descendents[i].update(descendent)
 
-                    transaction._rpc(self.connection).put(descendents)
+                    for descendent in descendents:
+                        transaction._rpc(self.connection).put(descendent)
+
                 results.append(new_key)
             return results
 

@@ -17,6 +17,8 @@ from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 from .utils import get_top_concrete_parent
 
+from . import transaction
+
 logger = logging.getLogger(__name__)
 _project_special_indexes = {}
 _app_special_indexes = {}
@@ -45,11 +47,11 @@ def _get_app_index_files():
 
 
 def _get_table_from_model(model_class):
-    return model_class._meta.db_table.encode("utf-8")
+    return model_class._meta.db_table
 
 
 def _is_iterable(value):
-    return hasattr(value, '__iter__')  # is a list, tuple or set?
+    return hasattr(value, '__iter__') and not isinstance(value, (str, bytes)) # is a list, tuple or set?
 
 
 def _deduplicate_list(value_list):
@@ -74,7 +76,7 @@ def _merged_indexes():
     global _app_special_indexes
 
     result = _app_special_indexes.copy()
-    for model, indexes in _project_special_indexes.items():
+    for model, indexes in (_project_special_indexes or {}).items():
         for field_name, values in indexes.items():
             result.setdefault(
                 model, {}
@@ -163,43 +165,60 @@ def special_indexes_for_column(model_class, column):
     return special_indexes_for_model(model_class).get(column, [])
 
 
-def write_special_indexes():
+def write_special_indexes(connection):
     """
         Writes the project-specific indexes to the project djangaeidx.yaml
     """
-    project_index_file = _get_project_index_file()
+    project_index_file = _get_project_index_file(connection)
 
     with open(project_index_file, "w") as stream:
         stream.write(yaml.dump(_project_special_indexes))
 
 
 def add_special_index(connection, model_class, field_name, indexer, operator, value=None):
-    from djangae.utils import in_testing
+    global _project_special_indexes
+
     from django.conf import settings
 
     index_type = indexer.prepare_index_type(operator, value)
 
-    field_name = field_name.encode("utf-8")  # Make sure we are working with strings
+    field_name = str(field_name)  # Make sure we are working with strings
 
     load_special_indexes(connection)
 
     if special_index_exists(model_class, field_name, index_type):
         return
 
-    if environment.is_production_environment() or (
-        in_testing() and not getattr(settings, "GENERATE_SPECIAL_INDEXES_DURING_TESTING", False)
-    ):
+    connection_params = connection.get_connection_params()
+
+    # Test connections have a name starting with test_
+    is_test_connection = connection_params["NAME"].startswith("test_")
+
+    # Normal connections default to generating special indexes
+    should_write_indexes = connection_params.get("GENERATE_SPECIAL_INDEXES", True)
+
+    if is_test_connection:
+        # Test connections default to NOT generating special indexes
+        test_params = connection_params.get("TEST", {})
+        should_write_indexes = test_params.get("GENERATE_SPECIAL_INDEXES", False)
+
+    # FIXME: We need a can_write_indexes so we can throw an error if the filesystem isn't
+    # writeable.
+    if should_write_indexes:
         raise RuntimeError(
             "There is a missing index in your djangaeidx.yaml - \n\n{0}:\n\t{1}: [{2}]".format(
                 _get_table_from_model(model_class), field_name, index_type
             )
         )
 
+    if _project_special_indexes is None:
+        _project_special_indexes = {}
+
     _project_special_indexes.setdefault(
         _get_table_from_model(model_class), {}
     ).setdefault(field_name, []).append(str(index_type))
 
-    write_special_indexes()
+    write_special_indexes(connection)
 
 
 class IgnoreForIndexing(Exception):
@@ -571,7 +590,7 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
     def _generate_permutations(self, value):
         return [value[i:] for i in range(len(value))]
 
-    def prep_value_for_database(self, value, index, model, column):
+    def prep_value_for_database(self, value, index, model, column, connection):
         if value is None:
             raise IgnoreForIndexing([])
 
@@ -589,7 +608,14 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
 
         value = list(set(value)) # De-duplicate
 
-        entity = Entity(self._generate_kind_name(model, column), name=self.OPERATOR)
+        namespace = connection.settings_dict.get("NAMESPACE", "")
+
+        key = transaction._rpc(using=connection.alias).key(
+            self._generate_kind_name(model, column),
+            self.OPERATOR,
+            namespace=namespace
+        )
+        entity = Entity(key)
         entity[self.INDEXED_COLUMN_NAME] = value
         return [entity]
 
@@ -609,7 +635,7 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
         if hasattr(value, "isoformat"):
             value = value.isoformat()
         else:
-            value = unicode(value)
+            value = str(value)
         value = self.unescape(value)
 
         if STRIP_PERCENTS:
@@ -618,15 +644,21 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
                 value = value[1:-1]
 
         namespace = connection.settings_dict.get("NAMESPACE", "")
-        qry = Query(self._generate_kind_name(model, column), keys_only=True, namespace=namespace)
-        qry['{} >='.format(self.INDEXED_COLUMN_NAME)] = value
-        qry['{} <='.format(self.INDEXED_COLUMN_NAME)] = value + u'\ufffd'
+
+        qry = transaction._rpc(using=connection.alias).query(
+            kind=self._generate_kind_name(model, column),
+            namespace=namespace
+        )
+        qry.keys_only()
+
+        qry.add_filter(self.INDEXED_COLUMN_NAME, '>=', value)
+        qry.add_filter(self.INDEXED_COLUMN_NAME, '<=', value + u'\ufffd')
 
         # We can't filter on the 'name' as part of the query, because the name is the key and these
         # are child entities of the ancestor entities which they are indexing, and as we don't know
         # the keys of the ancestor entities we can't create the complete keys, hence the comparison
         # of `x.name() == self.OPERATOR` happens here in python
-        resulting_keys = set([x.parent() for x in qry.Run() if x.name() == self.OPERATOR])
+        resulting_keys = set([x.key.parent for x in qry.fetch() if x.key.name == self.OPERATOR])
         return resulting_keys
 
 
