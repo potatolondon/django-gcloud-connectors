@@ -19,7 +19,11 @@ def _unique_combinations(model, ignore_pk=False):
 def _format_value_for_identifier(value):
     # AppEngine max key length is 500 chars, so if the value is a string we hexdigest it to reduce the length
     # otherwise we str() it as it's probably an int or bool or something.
-    return md5(value.encode("utf-8")).hexdigest() if isinstance(value, basestring) else str(value)
+    return (
+        md5(value.encode("utf-8")).hexdigest() if
+        isinstance(value, str) else
+        str(value)
+    )
 
 
 def unique_identifiers_from_entity(model, entity, ignore_pk=False, ignore_null_values=True):

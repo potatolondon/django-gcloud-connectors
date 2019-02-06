@@ -416,7 +416,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return value
 
     def value_from_db_date(self, value):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
             value = datetime.datetime.fromtimestamp(float(value) / 1000000.0)
 
