@@ -23,6 +23,7 @@ from . import (
     transaction,
     utils,
 )
+from .caching import remove_entities_from_cache_by_key
 from .dbapi import NotSupportedError
 from .dnf import normalize_query
 from .formatting import generate_sql_representation
@@ -817,7 +818,8 @@ class DeleteCommand(object):
              write.
              - Check the entity matches the query still (there's a fixme there)
         """
-        from djangae.db.backends.appengine.indexing import indexers_for_model
+        from .indexing import indexers_for_model
+        from .constraints import has_active_unique_constraints, release
 
         self.select.execute()
 
@@ -875,12 +877,17 @@ class DeleteCommand(object):
                 for key in to_delete:
                     indexer.cleanup(key)
 
-            caching.remove_entities_from_cache_by_key(
+            # Remove any cache keys
+            remove_entities_from_cache_by_key(
                 updated_keys, self.namespace
             )
 
             return len(updated_keys)
 
+        # if unique constraints are active, we have to take some additional
+        # steps to make sure all references are cleaned up as we go. We do
+        # this here to avoid some overhead in the batch operation loop
+        model_has_active_constraints = has_active_unique_constraints(self.model)
         deleted = 0
         while keys:
             deleted += delete_batch(keys[:datastore_stub_util._MAX_EG_PER_TXN])

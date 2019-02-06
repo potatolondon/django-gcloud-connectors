@@ -31,7 +31,7 @@ def unique_identifiers_from_entity(model, entity, ignore_pk=False, ignore_null_v
         Given an instance, this function returns a list of identifier strings that represent
         unique field/value combinations.
     """
-    from djangae.db.utils import get_top_concrete_parent
+    from .utils import get_top_concrete_parent
 
     unique_combinations = _unique_combinations(model, ignore_pk)
 
