@@ -7,7 +7,7 @@ it contains a connector for the Google Cloud Datastore (Firestore in Datastore m
 it may also house a Firestore connector, or even a MemoryStore one.
 
 This is the continuation of the Datastore connector from the [Djangae project](https://github.com/potatolondon/djangae)
-but converted to use the Cloud Datastore API on Python 3.
+but converted to use the [Cloud Datastore API](https://googleapis.github.io/google-cloud-python/latest/datastore/) on Python 3.
 
 
 # Running the tests
