@@ -96,7 +96,7 @@ def unique_identifiers_from_entity(model, entity, ignore_pk=True, ignore_null_va
     These are then used before we put() anything into the database, to check
     that there are no existing markers satisfying those unique constraints.
     """
-    from djangae.db.utils import get_top_concrete_parent
+    from .utils import get_top_concrete_parent
 
     # get all combintatons of unique combinations defined on the model class
     unique_combinations = _unique_combinations(model, ignore_pk)
