@@ -768,35 +768,40 @@ class InsertCommand(object):
         return generate_sql_representation(self)
 
 
-@python_2_unicode_compatible
 class DeleteCommand(object):
+    """
+    Delete an entity / multiple entities.
+
+    Limits imposed by the Datastore in Firestore mode (such as 500 write operations
+    per batch) and the backend internal implementation details (such as removing
+    related unique markers) are handled under the hood.
+    """
+
     def __init__(self, connection, query):
+        self.connection = connection
         self.model = query.model
-        self.select = SelectCommand(connection, query, keys_only=True)
-        self.query = self.select.query
         self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+
+        self.select = SelectCommand(connection, query, keys_only=True)
+        self.query = self.select.query # we only need this for the generate_sql_formatter caller...
 
         # It seems query.tables is populated in most cases, but I have seen cases (albeit in testing)
         # where this isn't the case (particularly when not filtering on anything). In that case
         # fallback to the model table (perhaps we should do
-        self.table_to_delete = (
-            query.tables[0] if query.tables else
-            utils.get_top_concrete_parent(query.model)._meta.db_table
-        )
-
-    def __str__(self):
-        return generate_sql_representation(self)
+        try:
+            table = query.tables[0]
+        except (AttributeError, IndexError):
+            table = utils.get_top_concrete_parent(query.model)._meta.db_table
+        self.table_to_delete = table # used in wipe_polymodel_from_entity
 
     def execute(self):
         """
             Ideally we'd just be able to tell appengine to delete all the entities
             which match the query, that would be nice wouldn't it?
 
-            Except we can't. Firstly Delete() only accepts keys so we first have to
+            Except we can't. Firstly delete() only accepts keys so we first have to
             execute a keys_only query to find the entities that match the query, then send
-            those keys to Delete(), except it's not as easy as that either because the
-            query might be eventually consistent and so we might delete entities which
-            were updated in another request and no-longer match the query. Bugger.
+            those keys to delete().
 
             And then there might be constraints... in which case we need to grab the entity
             in its entirety, release any constraints and then delete the entity.
@@ -805,8 +810,8 @@ class DeleteCommand(object):
             deleting the entity after all, only deleting some of the fields from it.
 
             What we do then is do a keys_only query, then iterate the entities in batches of
-            25 (well _MAX_EG_PER_TXN), each entity in the batch has its polymodel fields wiped out
-            (if necessary) and then we do either a PutAsync or DeleteAsync all inside a transaction.
+            500, each entity in the batch has its polymodel fields wiped out
+            (if necessary) and then we do either a put() or delete() all inside a transaction.
 
             Oh, and we wipe out memcache and delete the constraints in an independent transaction.
 
@@ -819,62 +824,58 @@ class DeleteCommand(object):
              - Check the entity matches the query still (there's a fixme there)
         """
         from .indexing import indexers_for_model
-        from .constraints import has_active_unique_constraints, release
+        from .constraints import has_active_unique_constraints
 
-        self.select.execute()
-
-        constraints_enabled = constraints.has_active_unique_constraints(self.model)
-        keys = [x.key() for x in self.select.results]
-
-        def wipe_polymodel_from_entity(entity, db_table):
+        @transaction.atomic()
+        def delete_batch(key_slice, constraints_enabled=False):
             """
-                Wipes out the fields associated with the specified polymodel table
+                Batch fetch entities, wiping out any polymodel fields if
+                necessary, before deleting the entities by key.
+
+                Any memcache references and unique markers are also removed.
+
+                FIXME-GCG around 500 operations per transaction see
+                https://cloud.google.com/firestore/docs/manage-data/transactions#batched-writes
             """
-            polymodel_value = entity.get('class', [])
-            if polymodel_value and self.table_to_delete in polymodel_value:
-                # Remove any local fields from this model from the entity
-                model = utils.get_model_from_db_table(self.table_to_delete)
-                for field in model._meta.local_fields:
-                    col = field.column
-                    if col in entity:
-                        del entity[col]
-
-                # Then remove this model from the polymodel heirarchy
-                polymodel_value.remove(self.table_to_delete)
-                if polymodel_value:
-                    entity['class'] = polymodel_value
-
-        @db.transactional(xg=True)
-        def delete_batch(key_slice):
-            entities = rpc.Get(key_slice)
-
-            # FIXME: We need to make sure the entity still matches the query!
-#            entities = (x for x in entities if utils.entity_matches_query(x, self.select.gae_query))
-
-            to_delete = []
-            to_update = []
+            keys_to_delete = []
+            entities_to_update = []
             updated_keys = []
 
-            # Go through the entities
+            # get() expects Key objects, not just dicts with id keys
+            keys_in_slice = [
+                get_datastore_key(self.connection, self.model, key_id) for
+                key_id in key_slice
+            ]
+            entities = transaction._rpc(self.connection).get(keys_in_slice)
             for entity in entities:
+
+                # make sure the entity still exists
                 if entity is None:
                     continue
 
-                wipe_polymodel_from_entity(entity, self.table_to_delete)
+                # handle polymodels
+                _wipe_polymodel_from_entity(entity, self.table_to_delete)
+
                 if not entity.get('class'):
-                    to_delete.append(entity.key())
+                    keys_to_delete.append(entity.key)
                     if constraints_enabled:
-                        constraints.release(self.model, entity)
+                        pass
+                        # FIXME-GCG release / delete the unique constraint
                 else:
-                    to_update.append(entity)
-                updated_keys.append(entity.key())
+                    entities_to_update.append(entity)
+                updated_keys.append(entity)
 
-            rpc.DeleteAsync(to_delete)
-            rpc.PutAsync(to_update)
+            # we don't need an explicit batch here, as we are inside a transaction
+            # which already applies this beahviour of non blocking RPCs until
+            # the transaction is commited
+            for key in keys_to_delete:
+                transaction._rpc(self.connection).delete(key)
+            for entity in entities_to_update:
+                transaction._rpc(self.connection).put(entity)
 
-            # Clean up any special index things that need to be cleaned
+            # Clean up any special indexes that need to be removed
             for indexer in indexers_for_model(self.model):
-                for key in to_delete:
+                for key in keys_to_delete:
                     indexer.cleanup(key)
 
             # Remove any cache keys
@@ -884,14 +885,25 @@ class DeleteCommand(object):
 
             return len(updated_keys)
 
+        # grab the result of the keys only query (see __init__)
+        self.select.execute()
+        key_ids = [x[self.model._meta.pk.name] for x in self.select.results]
+
         # if unique constraints are active, we have to take some additional
         # steps to make sure all references are cleaned up as we go. We do
         # this here to avoid some overhead in the batch operation loop
         model_has_active_constraints = has_active_unique_constraints(self.model)
+
+        # loop over the result set and delete the entities
         deleted = 0
-        while keys:
-            deleted += delete_batch(keys[:datastore_stub_util._MAX_EG_PER_TXN])
-            keys = keys[datastore_stub_util._MAX_EG_PER_TXN:]
+        while key_ids:
+            # FIXME-GCG find an internal constant to ref for 500 instead of hardcode
+            # FIXME-GCG we need to determine how the limit is calculated and
+            # ammend this number accordingly
+            deleted += delete_batch(
+                key_ids[:500], constraints_enabled=model_has_active_constraints
+            )
+            key_ids = key_ids[500:]
 
         return deleted
 
@@ -900,6 +912,28 @@ class DeleteCommand(object):
             This exists solely for django-debug-toolbar compatibility.
         """
         return unicode(self).lower()
+
+    def __str__(self):
+        return generate_sql_representation(self)
+
+
+def _wipe_polymodel_from_entity(entity, db_table):
+    """
+        Wipes out the fields associated with the specified polymodel table.
+    """
+    polymodel_value = entity.get('class', [])
+    if polymodel_value and db_table in polymodel_value:
+        # Remove any local fields from this model from the entity
+        model = utils.get_model_from_db_table(db_table)
+        for field in model._meta.local_fields:
+            col = field.column
+            if col in entity:
+                del entity[col]
+
+        # Then remove this model from the polymodel heirarchy
+        polymodel_value.remove(db_table)
+        if polymodel_value:
+            entity['class'] = polymodel_value
 
 
 @python_2_unicode_compatible
