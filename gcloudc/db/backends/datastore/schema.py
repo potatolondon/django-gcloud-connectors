@@ -5,8 +5,7 @@ import logging
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.utils.log import getLogger
 
-# DJANGAE
-from djangae.db.backends.appengine.dbapi import CouldBeSupportedError
+from .schema import CouldBeSupportedError
 
 logger = logging.getLogger("djangae")
 

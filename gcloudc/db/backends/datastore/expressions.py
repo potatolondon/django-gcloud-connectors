@@ -1,8 +1,10 @@
 from django.db import NotSupportedError
 from django.db.models.expressions import F, Col
 from django.utils import six
-from djangae.db.utils import get_prepared_db_value
 from django.db.models.aggregates import Aggregate
+
+from .utils import get_prepared_db_value
+
 
 CONNECTORS = {
     F.ADD: lambda l, r: l + r,
