@@ -184,7 +184,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         # Bulk insertions really need to be limited to 25 elsewhere (so that they can be done)
         # transactionally, so setting to 30 doesn't matter but for cascade deletions
         # (which explode to thing_id__in=[]) we need to limit to MAX_ALLOWABLE_QUERIES
-        return rpc.MAX_ALLOWABLE_QUERIES
+        return 500
 
     def quote_name(self, name):
         return name
