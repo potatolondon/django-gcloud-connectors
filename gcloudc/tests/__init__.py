@@ -1,8 +1,55 @@
+import os
+
 from django.test import TestCase as DjangoTestCase
 from django.db import models
 
+from google.cloud import datastore, environment_vars
+
+import requests
+
+
+def _init_datastore_client():
+    return datastore.Client(
+        namespace=None,
+        project="test",
+        _http=requests.Session if os.environ.get(environment_vars.GCD_HOST) else None,
+    )
+
+def get_kind_query(kind, keys_only=True):
+    datastore_client = _init_datastore_client()
+    query = datastore_client.query(kind=kind)
+    if keys_only:
+        query.keys_only()
+    return list(query.fetch())
+
 
 class TestCase(DjangoTestCase):
+
+    # FIXME this is a temporary/nuclear option to wipe the datastore of all entities
+    # between each unit test - eventually we hope we can use the transaction
+    # logic in vanilla django or better embed this into a test runner setup etc
+    KINDS_TO_DELETE = []
+
+    def setUp(self):
+        super(TestCase, self).setUp()
+        self.datastore_client = _init_datastore_client()
+
+        for kind in self.KINDS_TO_DELETE:
+            query = self.datastore_client.query(kind=kind)
+            query.keys_only()
+            results = list(query.fetch())
+            if results:
+                self.datastore_client.delete_multi([result.key for result in results])
+
+    def tearDown(self):
+        super(TestCase, self).tearDown()
+        for kind in self.KINDS_TO_DELETE:
+            query = self.datastore_client.query(kind=kind)
+            query.keys_only()
+            results = list(query.fetch())
+            if results:
+                self.datastore_client.delete_multi([result.key for result in results])
+
     # This was mistakenly renamed to assertCountsEqual
     # in Python 3, so this avoids any complications arising
     # when they rectify that! https://bugs.python.org/issue27060
