@@ -13,7 +13,7 @@ from urllib.error import HTTPError, URLError
 _COMPONENTS_LIST_COMMAND = "gcloud components list --format=json".split()
 _REQUIRED_COMPONENTS = set(['beta', 'cloud-datastore-emulator', 'core'])
 
-_BASE_COMMAND = "gcloud beta emulators datastore start --consistency=1 --quiet --project=test".split()
+_BASE_COMMAND = "gcloud beta emulators datastore start --consistency=1.0 --quiet --project=test".split()
 _DEFAULT_PORT = 9090
 
 
