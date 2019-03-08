@@ -253,7 +253,21 @@ class TransactionFailedError(Exception):
 
 
 class AtomicDecorator(context_decorator.ContextDecorator):
-    VALID_ARGUMENTS = ("independent", "mandatory", "using", "read_only", "enable_cache")
+    """
+    Exposes a decorator based API for transaction use. This in turn allows us
+    to define the expected behaviour of each transaction via kwargs.
+
+    For example passing `independent` creates a new transaction instance using
+    the Datastore client under the hood. This is useful to workaround the
+    limitations of 500 entity writes per transaction/batch.
+    """
+    VALID_ARGUMENTS = (
+        "independent",
+        "mandatory",
+        "using",
+        "read_only",
+        "enable_cache",
+    )
 
     @classmethod
     def _do_enter(cls, state, decorator_args):
