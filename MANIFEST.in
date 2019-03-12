@@ -1,0 +1,7 @@
+include LICENSE.md
+include README.md
+include djangae/fields/allkeys-5.2.0.zip
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-include * *.html
+
