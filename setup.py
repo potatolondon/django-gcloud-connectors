@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -10,7 +10,7 @@ DESC = """
 setup(
     name='django-gcloud-connectors',
     version='0.1',
-    packages=['gcloudc'],
+    packages=find_packages(),
     description='Django Database Backends for Google Cloud Databases',
     long_description=DESC,
     author='Potato London Ltd.',
