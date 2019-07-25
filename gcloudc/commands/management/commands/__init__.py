@@ -50,14 +50,17 @@ class CloudDatastoreRunner:
                 )
             )
 
-    def _get_args(self, **kwargs):
+    def _datastore_filename(self):
         BASE_DIR = getattr(settings, "BASE_DIR", None)
 
         if not BASE_DIR:
             raise ImproperlyConfigured("Please define BASE_DIR in your Django settings")
 
+        return os.path.join(BASE_DIR, ".datastore")
+
+    def _get_args(self, **kwargs):
         return [
-            "--data-dir=%s" % (os.path.join(BASE_DIR, ".datastore")),
+            "--data-dir=%s" % self._datastore_filename(),
             "--host-port=127.0.0.1:%s" % kwargs.get("port", _DEFAULT_PORT)
         ]
 
@@ -69,17 +72,23 @@ class CloudDatastoreRunner:
         print("Waiting for Cloud Datastore Emulator...")
         time.sleep(1)
 
+        failures = 0
         while True:
             try:
                 response = urlopen("http://127.0.0.1:%s/" % _DEFAULT_PORT)
             except (HTTPError, URLError):
-                time.sleep(3)
-                logging.exception(
-                    "Error connecting to the Cloud Datastore Emulator. Retrying..."
-                )
+                failures += 1
+                time.sleep(1)
+                if failures > 5:
+                    # Only start logging if this becomes persistent
+                    logging.exception(
+                        "Error connecting to the Cloud Datastore Emulator. Retrying..."
+                    )
                 continue
 
             if response.status == 200:
+                # Give things a second to really boot
+                time.sleep(1)
                 break
 
             if (datetime.now() - start).total_seconds() > TIMEOUT:

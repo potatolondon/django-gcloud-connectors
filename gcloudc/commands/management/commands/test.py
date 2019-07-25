@@ -1,3 +1,5 @@
+import tempfile
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import load_command_class
@@ -26,4 +28,7 @@ BaseCommand = locate_test()
 
 
 class Command(CloudDatastoreRunner, BaseCommand):
-    pass
+    def _datastore_filename(self):
+        print("Creating temporary test database...")
+        return tempfile.TemporaryDirectory().name
+
