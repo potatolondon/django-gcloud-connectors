@@ -602,7 +602,7 @@ class SelectCommand(object):
         """
             This exists solely for django-debug-toolbar compatibility.
         """
-        return unicode(self).lower()
+        return str(self).lower()
 
 
 class FlushCommand(object):
@@ -616,7 +616,7 @@ class FlushCommand(object):
     def __init__(self, table, connection):
         self.connection = connection.alias
         self.table = table
-        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE", "")
 
     def execute(self):
         table = self.table
@@ -639,9 +639,9 @@ def reserve_id(connection, kind, id_or_name, namespace):
 
     # https://github.com/googleapis/google-cloud-python/issues/7111
     gclient = connection.connection.gclient
-    reserve_ids = gclient._datastore_api
+    reserve_ids = gclient._datastore_api.reserve_ids
     reserve_ids(
-        project=gclient.project,
+        project_id=gclient.project,
         keys=[gclient.key(kind, id_or_name, namespace=namespace).to_protobuf()]
     )
 

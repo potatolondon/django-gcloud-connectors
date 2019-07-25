@@ -311,6 +311,10 @@ class QueryByKeys(object):
 
         self.ordering = ordering
         self.kind = queries[0].kind
+        self._keys_only_override = False
+
+    def keys_only(self):
+        self._keys_only_override = True
 
     def fetch(self, limit=None, offset=None):
         """
@@ -390,7 +394,9 @@ class QueryByKeys(object):
                     continue
                 else:
                     yield _convert_entity_based_on_query_options(
-                        result, is_keys_only(base_query), base_query.projection
+                        result,
+                        self._keys_only_override or is_keys_only(base_query),
+                        base_query.projection
                     )
 
                     returned += 1

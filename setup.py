@@ -19,8 +19,9 @@ setup(
     license='MIT',
     install_requires=[
         'Django>=2.0,<3.0',
-        'pyyaml',
-        'google-cloud-datastore',
-        'sleuth-mock==0.1'
+        'pyyaml==5.1.1',
+        'google-cloud-datastore==1.8.0',
+        'sleuth-mock==0.1',
+        'pyuca==1.2',
     ]
 )

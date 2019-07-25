@@ -225,7 +225,8 @@ class DatabaseOperations(BaseDatabaseOperations):
         return converters
 
     def convert_textfield_value(self, value, expression, connection, context=None):
-        if isinstance(value, str):
+        if isinstance(value, bytes):
+            # Should we log a warning here? It shouldn't have been stored as bytes
             value = value.decode("utf-8")
         return value
 
@@ -342,11 +343,12 @@ class DatabaseOperations(BaseDatabaseOperations):
             value = float(value)
         elif db_type == 'string' or db_type == 'text':
             value = coerce_unicode(value)
-            if db_type == 'text':
-                value = Text(value)
         elif db_type == 'bytes':
             # Store BlobField, DictField and EmbeddedModelField values as Blobs.
-            value = Blob(value)
+            # We encode to bytes, as that's what the Cloud Datastore API expects
+            # we use ASCII to make sure there's no funky unicode data, it should
+            # be binary
+            value = value.encode("ascii")
         elif db_type == 'decimal':
             value = self.adapt_decimalfield_value(value, field.max_digits, field.decimal_places)
         elif db_type in ('list', 'set'):

@@ -160,11 +160,12 @@ def vc_encode(string):
         key_c = _VC_KEY[i % len(_VC_KEY)]
         enc_c = chr((ord(string[i]) + ord(key_c)) % 256)
         enc.append(enc_c)
-    return base64.urlsafe_b64encode("".join(enc))
+    ret = base64.urlsafe_b64encode("".join(enc).encode("utf-8")).decode("ascii")
+    return ret
 
 def vc_decode(enc):
     dec = []
-    enc = base64.urlsafe_b64decode(str(enc))
+    enc = base64.urlsafe_b64decode(enc).decode("utf-8")
     for i in range(len(enc)):
         key_c = _VC_KEY[i % len(_VC_KEY)]
         dec_c = chr((256 + ord(enc[i]) - ord(key_c)) % 256)
@@ -192,10 +193,12 @@ class GenericRelationWidget(forms.MultiWidget):
         super(GenericRelationWidget, self).__init__(widgets=widgets, *args, **kwargs)
 
     def decompress(self, value):
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             return decode_pk(value)
+
         if value:
             return [value._meta.db_table, value.pk]
+
         return [None, None]
 
 
@@ -290,8 +293,9 @@ class GenericRelationFormfield(forms.MultiValueField):
         if value is None:
             return None
 
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             return value
+
         return encode_pk(value.pk, value)
 
     def compress(self, data_list):

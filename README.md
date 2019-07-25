@@ -1,4 +1,4 @@
-# Django GCloud Connectors
+# Django GCloud Connectors (DGC)
 
 **WARNING: This is very much a work in progress, is unstable, and not ready for use**
 
@@ -16,3 +16,9 @@ but converted to use the Cloud Datastore API on Python 3.
 $ pip3 install --user tox
 $ tox
 ```
+
+# Automatic Cloud Datastore Emulator startup
+
+gcloudc provides overrides for the `runserver` and `test` commands which 
+start and stop a Cloud Datastore Emulator instance. To enable this functionality
+just add `gcloudc.commands` to your `INSTALLED_APPS` setting.

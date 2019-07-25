@@ -3,7 +3,6 @@ import copy
 from decimal import Decimal
 from itertools import chain
 
-
 from django import forms
 from django.db import models
 from django.db.models.lookups import Lookup, Transform
@@ -36,7 +35,7 @@ class ContainsLookup(Lookup):
         return '= %s' % rhs
 
     def get_prep_lookup(self):
-        if hasattr(self.rhs, "__iter__"):
+        if hasattr(self.rhs, "__iter__") and not isinstance(self.rhs, str):
             raise ValueError("__contains cannot take an iterable")
 
         # Currently, we cannot differentiate between an empty list (which we store as None) and a
@@ -212,7 +211,7 @@ class IterableField(models.Field):
             return self._iterable_type([])
 
         # If possible, parse the string into the iterable
-        if not hasattr(value, "__iter__"): # Allows list/set, not string
+        if not hasattr(value, "__iter__") or isinstance(value, str):
             if isinstance(value, six.string_types):
                 if value.startswith("[") and value.endswith("]"):
                     value = value[1:-1].strip()
@@ -325,7 +324,7 @@ class IterableField(models.Field):
 
     def value_to_string(self, obj):
         return "[" + ",".join(
-            _serialize_value(o) for o in self._get_val_from_obj(obj)
+            _serialize_value(o) for o in self.value_from_object(obj)
         ) + "]"
 
 
