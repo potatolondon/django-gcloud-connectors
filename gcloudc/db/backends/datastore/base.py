@@ -181,10 +181,9 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def bulk_batch_size(self, field, objs):
         # This value is used in cascade deletions, and also on bulk insertions
-        # Bulk insertions really need to be limited to 25 elsewhere (so that they can be done)
-        # transactionally, so setting to 30 doesn't matter but for cascade deletions
-        # (which explode to thing_id__in=[]) we need to limit to MAX_ALLOWABLE_QUERIES
-        return rpc.MAX_ALLOWABLE_QUERIES
+        # This is the limit of the number of entities that can be manipulated in
+        # a single transaction
+        return 500
 
     def quote_name(self, name):
         return name
@@ -411,7 +410,7 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     # Unlike value_to_db, these are not overridden or standard Django, it's just nice to have symmetry
     def value_from_db_datetime(self, value):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
             value = datetime.datetime.fromtimestamp(float(value) / 1000000.0)
 
@@ -420,7 +419,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return value
 
     def value_from_db_date(self, value):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
             value = datetime.datetime.fromtimestamp(float(value) / 1000000.0)
 
@@ -429,7 +428,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return value
 
     def value_from_db_time(self, value):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
             value = datetime.datetime.fromtimestamp(float(value) / 1000000.0).time()
 
