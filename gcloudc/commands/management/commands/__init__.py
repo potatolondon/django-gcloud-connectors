@@ -18,14 +18,20 @@ _DEFAULT_PORT = 9090
 
 
 class CloudDatastoreRunner:
+    USE_MEMORY_DATASTORE_BY_DEFAULT = False
+
     def __init__(self, *args, **kwargs):
         self._process = None
         super().__init__(*args, **kwargs)
 
     def add_arguments(self, parser):
         super().add_arguments(parser)
-        parser.add_argument("--nodatastore", action="store_false", dest="datastore", default=True)
+        parser.add_argument("--no-datastore", action="store_false", dest="datastore", default=True)
         parser.add_argument("--datastore-port", action="store", dest="port", default=_DEFAULT_PORT)
+        parser.add_argument(
+            "--use-memory-datastore", action="store_true", dest="use_memory_datastore",
+            default=self.USE_MEMORY_DATASTORE_BY_DEFAULT
+        )
 
     def execute(self, *args, **kwargs):
         try:
@@ -59,10 +65,17 @@ class CloudDatastoreRunner:
         return os.path.join(BASE_DIR, ".datastore")
 
     def _get_args(self, **kwargs):
-        return [
-            "--data-dir=%s" % self._datastore_filename(),
+        args = [
             "--host-port=127.0.0.1:%s" % kwargs.get("port", _DEFAULT_PORT)
         ]
+
+        if kwargs["use_memory_datastore"]:
+            print("Using in-memory datastore")
+            args.append("--no-store-on-disk")
+        else:
+            args.append("--data-dir=%s" % self._datastore_filename())
+
+        return args
 
     def _wait_for_datastore(self):
         TIMEOUT = 60.0

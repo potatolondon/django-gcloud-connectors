@@ -28,6 +28,8 @@ BaseCommand = locate_test()
 
 
 class Command(CloudDatastoreRunner, BaseCommand):
+    USE_MEMORY_DATASTORE_BY_DEFAULT = True
+
     def _datastore_filename(self):
         print("Creating temporary test database...")
 
@@ -35,4 +37,3 @@ class Command(CloudDatastoreRunner, BaseCommand):
         # datastore emulator then intializes as a new
         # datastore
         return tempfile.TemporaryDirectory().name
-
