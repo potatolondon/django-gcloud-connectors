@@ -29,6 +29,14 @@ from gcloudc.db.models.fields.iterable import (
 )
 
 
+def is_iterable(o):
+    try:
+        iter(o)
+    except TypeError:
+        return False
+    return True
+
+
 class RelatedIteratorRel(ForeignObjectRel):
     def __init__(self, field, to, related_name=None, limit_choices_to=None, on_delete=models.DO_NOTHING, **kwargs):
         self.field = field
@@ -99,13 +107,15 @@ class OrderedQuerySet(QuerySet):
                 pk_col = locate_pk_column(clone.query)
                 if pk_col is None:
                     # Manually add the PK to the result set
-                    clone = clone.values_list(*(["pk"] + values_select))
-                    values_select = [x.field.name for x in clone.query.select]
+                    clone = clone.values_list(*(("pk",) + values_select))
+                    values_select = tuple((x.field.name for x in clone.query.select))
                     pk_col = 0
                     pk_added = True
 
             # Hit the database
-            results = list(clone)
+            results = [
+                (values,) if not is_iterable(values) else tuple(values) for values in list(clone)
+            ]
 
             ordered_results = []
             pk_hash = {}
@@ -113,12 +123,12 @@ class OrderedQuerySet(QuerySet):
             flat = self._iterable_class == FlatValuesListIterable
 
             for x in results:
-                if isinstance(x, models.Model):
+                if isinstance(x[0], models.Model):
                     # standard query case
-                    pk_hash[x.pk] = x
+                    pk_hash[x[0].pk] = x[0]
                 elif len(values_select) == 1:
                     # Only PK case
-                    pk_hash[x if flat else x[pk_col]] = x
+                    pk_hash[x[0] if flat else x[pk_col]] = x[0] if flat else x
                 else:
                     # Multiple columns (either passed in, or as a result of the PK being added)
                     if flat:
@@ -232,7 +242,8 @@ class RelatedIteratorManagerBase(object):
             lambda inst: inst._prefetch_instance_id,
             lambda obj: obj.pk,
             False,
-            self.field.name # Use the field name as the cache name
+            self.field.name, # Use the field name as the cache name
+            False
         )
 
     def get_queryset(self):

@@ -1,12 +1,9 @@
-# STANDARD LIBRARY
 import logging
 
-# 3RD PARTY
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.utils.log import getLogger
 
-# DJANGAE
-from djangae.db.backends.appengine.dbapi import CouldBeSupportedError
+from gcloudc.db.backends.datastore.dbapi import CouldBeSupportedError
 
 logger = logging.getLogger("djangae")
 

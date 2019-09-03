@@ -23,5 +23,9 @@ setup(
         'google-cloud-datastore==1.8.0',
         'sleuth-mock==0.1',
         'pyuca==1.2',
+        'pyasn1_modules',
+        'jinja2',
+        'google-cloud-ndb',
+        'protobuf',
     ]
 )

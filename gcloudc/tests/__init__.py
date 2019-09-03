@@ -1,5 +1,15 @@
-from django.test import TestCase as DjangoTestCase
 from django.db import models
+from django.test import TestCase as DjangoTestCase
+
+from gcloudc.db.models.fields.iterable import (
+    ListField,
+    SetField
+)
+
+from gcloudc.db.models.fields.related import (
+    RelatedListField,
+    RelatedSetField,
+)
 
 
 class TestCase(DjangoTestCase):
@@ -16,6 +26,41 @@ class TestCase(DjangoTestCase):
 class BasicTestModel(models.Model):
     field1 = models.CharField(max_length=100)
     field2 = models.IntegerField(unique=True)
+
+
+class ISOther(models.Model):
+    name = models.CharField(max_length=500)
+
+    def __str__(self):
+        return "%s:%s" % (self.pk, self.name)
+
+    class Meta:
+        app_label = "gcloudc"
+
+
+class IterableFieldsWithValidatorsModel(models.Model):
+    set_field = SetField(
+        models.CharField(max_length=100),
+        min_length=2, max_length=3, blank=False
+    )
+
+    list_field = ListField(
+        models.CharField(max_length=100),
+        min_length=2, max_length=3, blank=False
+    )
+
+    related_set = RelatedSetField(
+        ISOther, min_length=2, max_length=3, blank=False
+    )
+
+    related_list = RelatedListField(
+        ISOther,
+        related_name="iterable_list",
+        min_length=2, max_length=3, blank=False
+    )
+
+    class Meta:
+        app_label = "gcloudc"
 
 
 class BasicTest(TestCase):

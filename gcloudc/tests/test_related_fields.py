@@ -1,4 +1,4 @@
-from . import TestCase
+from gcloudc.tests import TestCase, ISOther, IterableFieldsWithValidatorsModel
 import sleuth
 
 from django import forms
@@ -13,19 +13,6 @@ from gcloudc.db.models.fields.related import (
     GenericRelationField
 )
 from gcloudc.db.models.fields.charfields import CharField
-from gcloudc.db.models.fields.iterable import (
-    ListField,
-    SetField
-)
-
-class ISOther(models.Model):
-    name = models.CharField(max_length=500)
-
-    def __str__(self):
-        return "%s:%s" % (self.pk, self.name)
-
-    class Meta:
-        app_label = "gcloudc"
 
 
 class RelationWithoutReverse(models.Model):
@@ -54,17 +41,6 @@ class GenericRelationModel(models.Model):
 
     class Meta:
         app_label = "gcloudc"
-
-
-class IterableFieldsWithValidatorsModel(models.Model):
-    set_field = SetField(models.CharField(max_length=100), min_length=2, max_length=3, blank=False)
-    list_field = ListField(models.CharField(max_length=100), min_length=2, max_length=3, blank=False)
-    related_set = RelatedSetField(ISOther, min_length=2, max_length=3, blank=False)
-    related_list = RelatedListField(ISOther, related_name="iterable_list", min_length=2, max_length=3, blank=False)
-
-    class Meta:
-        app_label = "gcloudc"
-
 
 
 class ModelDatabaseA(models.Model):
@@ -179,7 +155,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_list': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'related_list': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -195,7 +171,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_list': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'related_list': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -211,7 +187,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_set': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'related_set': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -227,7 +203,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_set': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'related_set': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -321,7 +297,7 @@ class RelatedListFieldModelTests(TestCase):
             ret = thing.related_list.all()[0]
 
             self.assertEqual(1, get.call_count)
-            self.assertEqual(1, len(get.calls[0].args[2]))
+            self.assertEqual(1, len(get.calls[0].args[3]))
 
     def test_can_update_related_field_from_form(self):
         related = ISOther.objects.create()

@@ -1,7 +1,10 @@
-
 import datetime
 
-from . import TestCase
+from gcloudc.tests import (
+    TestCase,
+    ISOther,
+    IterableFieldsWithValidatorsModel
+)
 from django import forms
 from django.core import serializers
 from django.core.exceptions import ValidationError, ImproperlyConfigured
@@ -9,38 +12,6 @@ from django.db import models
 from gcloudc.db.models.fields.iterable import ListField, SetField
 from gcloudc.db.models.fields.related import RelatedListField, RelatedSetField
 from gcloudc.db.models.fields.charfields import CharField
-
-
-class ISOther(models.Model):
-    name = models.CharField(max_length=500)
-
-    def __str__(self):
-        return "%s:%s" % (self.pk, self.name)
-
-    class Meta:
-        app_label = "gcloudc"
-
-
-class IterableFieldsWithValidatorsModel(models.Model):
-    set_field = SetField(
-        models.CharField(max_length=100),
-        min_length=2, max_length=3, blank=False
-    )
-
-    list_field = ListField(
-        models.CharField(max_length=100),
-        min_length=2, max_length=3, blank=False
-    )
-
-    related_set = RelatedSetField(
-        ISOther, min_length=2, max_length=3, blank=False
-    )
-
-    related_list = RelatedListField(
-        ISOther,
-        related_name="iterable_list",
-        min_length=2, max_length=3, blank=False
-    )
 
 
 class IterableFieldModel(models.Model):
@@ -225,7 +196,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'list_field': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'list_field': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -241,7 +212,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'list_field': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'list_field': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -257,7 +228,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'set_field': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'set_field': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -273,7 +244,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'set_field': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'set_field': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -287,7 +258,6 @@ class IterableFieldTests(TestCase):
     def test_set_field_serializes_and_deserializes(self):
         obj = IterableFieldModel(set_field=set(['foo', 'bar']))
         data = serializers.serialize('json', [obj])
-
         new_obj = next(serializers.deserialize('json', data)).object
         self.assertEqual(new_obj.set_field, set(['foo', 'bar']))
 

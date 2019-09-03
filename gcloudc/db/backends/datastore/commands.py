@@ -16,6 +16,7 @@ from django.utils.encoding import (
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.key import Key
 from google.cloud.datastore.query import Query
+from google.cloud.ndb import transactional
 
 from . import (
     POLYMODEL_CLASS_ATTRIBUTE,
@@ -31,6 +32,7 @@ from .query_utils import (
     get_filter,
     has_filter,
 )
+from . import constraints
 from .unique_utils import query_is_unique
 from .utils import (
     MockInstance,
@@ -42,6 +44,8 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_EG_PER_TXN = 25
 
 OPERATORS_MAP = {
     'exact': '=',
@@ -774,12 +778,7 @@ class DeleteCommand(object):
         self.select = SelectCommand(connection, query, keys_only=True)
         self.query = self.select.query
         self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
-
-        # It seems query.tables is populated in most cases, but I have seen cases (albeit in testing)
-        # where this isn't the case (particularly when not filtering on anything). In that case
-        # fallback to the model table (perhaps we should do
         self.table_to_delete = (
-            query.tables[0] if query.tables else
             utils.get_top_concrete_parent(query.model)._meta.db_table
         )
 
@@ -817,12 +816,12 @@ class DeleteCommand(object):
              write.
              - Check the entity matches the query still (there's a fixme there)
         """
-        from djangae.db.backends.appengine.indexing import indexers_for_model
+        from gcloudc.db.backends.datastore.indexing import indexers_for_model
 
         self.select.execute()
 
         constraints_enabled = constraints.has_active_unique_constraints(self.model)
-        keys = [x.key() for x in self.select.results]
+        keys = [x.key for x in self.select.results]
 
         def wipe_polymodel_from_entity(entity, db_table):
             """
@@ -842,8 +841,9 @@ class DeleteCommand(object):
                 if polymodel_value:
                     entity['class'] = polymodel_value
 
-        @db.transactional(xg=True)
+        @transactional(xg=True)
         def delete_batch(key_slice):
+            rpc = transaction._rpc(self.connection)
             entities = rpc.Get(key_slice)
 
             # FIXME: We need to make sure the entity still matches the query!
@@ -883,8 +883,8 @@ class DeleteCommand(object):
 
         deleted = 0
         while keys:
-            deleted += delete_batch(keys[:datastore_stub_util._MAX_EG_PER_TXN])
-            keys = keys[datastore_stub_util._MAX_EG_PER_TXN:]
+            deleted += delete_batch(keys[:MAX_EG_PER_TXN])
+            keys = keys[MAX_EG_PER_TXN:]
 
         return deleted
 

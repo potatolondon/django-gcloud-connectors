@@ -1,12 +1,76 @@
+from datetime import timedelta
+from collections import OrderedDict
+import pickle
+
+from django import forms
+from django.core.exceptions import ValidationError, ImproperlyConfigured
+from django.core.validators import EmailValidator
+from django.db import models
+from django.test import override_settings
+
+from google.cloud import datastore
+
+from gcloudc.db.caching import disable_cache
+from gcloudc.db.models.fields.charfields import (
+    CharField,
+    CharOrNoneField
+)
+from gcloudc.db.models.fields.computed import (
+    ComputedBooleanField,
+    ComputedCharField,
+    ComputedIntegerField,
+    ComputedPositiveIntegerField,
+    ComputedTextField
+)
+from gcloudc.tests import ISOther
+from gcloudc.db.models.fields.related import (
+    GenericRelationField,
+    RelatedListField,
+    RelatedSetField
+)
+from gcloudc.db.models.fields.json import (
+    JSONField
+)
+from gcloudc.db.models.fields.iterable import (
+    ListField,
+    SetField
+)
+from gcloudc.db.models.fields.counting import ShardedCounterField
 
 from . import TestCase
-from django.db import models
-from gcloudc.db.models.fields.computed import ComputedCharField
 
 
-from django.core.exceptions import ImproperlyConfigured
+class ISStringReferenceModel(models.Model):
+    related_things = RelatedSetField('ISOther')
+    related_list = RelatedListField('ISOther', related_name="ismodel_list_string")
+    limted_related = RelatedSetField('RelationWithoutReverse', limit_choices_to={'name': 'banana'}, related_name="+")
+    children = RelatedSetField("self", related_name="+")
 
 
+class PFPost(models.Model):
+    content = models.TextField()
+    authors = RelatedSetField('PFAuthor', related_name='posts')
+
+
+class PFAuthor(models.Model):
+    name = models.CharField(max_length=32)
+    awards = RelatedSetField('PFAwards')
+
+
+class PFAwards(models.Model):
+    name = models.CharField(max_length=32)
+
+
+class ModelWithNonNullableFieldAndDefaultValue(models.Model):
+    some_field = models.IntegerField(null=False, default=1086)
+
+
+class JSONFieldModel(models.Model):
+    json_field = JSONField(use_ordered_dict=True, blank=True)
+
+
+class JSONFieldWithDefaultModel(models.Model):
+    json_field = JSONField(use_ordered_dict=True)
 
 
 class JSONFieldModelTests(TestCase):
@@ -21,9 +85,20 @@ class JSONFieldModelTests(TestCase):
             of Django when (for example) you load a NULL from the database into a field that is
             non-nullable. The field value will still be None when read.
         """
-        entity = datastore.Entity(JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"]["NAMESPACE"])
+        from django.conf import settings
+        from django.db import connections
+        from google.cloud.datastore.entity import Entity
+        from google.cloud.datastore.key import Key
+
+        conn = connections['default'].get_new_connection(
+            connections['default'].settings_dict
+        )
+
+        client = conn.gclient
+        key = client.key(JSONFieldModel._meta.db_table, 1)
+        entity = Entity(key=key)
         entity["json_field"] = "bananas"
-        datastore.Put(entity)
+        client.put(entity)
 
         instance = JSONFieldModel.objects.get(pk=1)
         self.assertEqual(instance.json_field, "bananas")
@@ -91,6 +166,24 @@ class JSONFieldModelTests(TestCase):
         self.assertEqual(thing.json_field, {})
 
 
+class ModelWithCharField(models.Model):
+    char_field_with_max = CharField(
+        max_length=10, default='', blank=True
+    )
+
+    char_field_without_max = CharField(
+        default='', blank=True
+    )
+
+    char_field_as_email = CharField(
+        max_length=100, validators=[EmailValidator(message='failed')], blank=True
+    )
+
+
+class ModelWithCharOrNoneField(models.Model):
+    char_or_none_field = CharOrNoneField(max_length=100)
+
+
 class CharFieldModelTests(TestCase):
 
     def test_char_field_with_max_length_set(self):
@@ -105,12 +198,12 @@ class CharFieldModelTests(TestCase):
             )
             self.assertRaisesMessage(
                 ValidationError,
-                'Ensure this value has at most 10 bytes (it has %d).' % byte_len,
+                "Ensure this value has at most 10 bytes (it has %d)." % byte_len,
                 test_instance.full_clean,
             )
 
     def test_char_field_with_not_max_length_set(self):
-        longest_valid_value = u'0123456789' * 150
+        longest_valid_value = '0123456789' * 150
         too_long_value = longest_valid_value + u'more'
 
         test_instance = ModelWithCharField(
@@ -121,7 +214,7 @@ class CharFieldModelTests(TestCase):
         test_instance.char_field_without_max = too_long_value
         self.assertRaisesMessage(
             ValidationError,
-            u'Ensure this value has at most 1500 bytes (it has 1504).',
+            'Ensure this value has at most 1500 bytes (it has 1504).',
             test_instance.full_clean,
          )
 
@@ -132,7 +225,7 @@ class CharFieldModelTests(TestCase):
     def test_too_long_max_value_set(self):
         try:
             class TestModel(models.Model):
-                test_char_field = CharField(max_length=1501)
+                test_char_field = models.CharField(max_length=1501)
         except AssertionError as e:
             self.assertEqual(
                 e.message,
@@ -220,6 +313,12 @@ class PickleTests(TestCase):
                 self.fail("Could not pickle %r: %s" % (field, e))
 
 
+class BinaryFieldModel(models.Model):
+    binary = models.BinaryField(null=True)
+
+    class Meta:
+        app_label = "djangae"
+
 
 class BinaryFieldModelTests(TestCase):
     binary_value = b'\xff'
@@ -254,6 +353,13 @@ class BinaryFieldModelTests(TestCase):
         readout = BinaryFieldModel.objects.get(pk = obj.pk)
 
         assert(readout.binary == self.binary_value)
+
+
+class CharFieldModel(models.Model):
+    char_field = models.CharField(max_length=500)
+
+    class Meta:
+        app_label = "djangae"
 
 
 class CharFieldModelTest(TestCase):
@@ -292,7 +398,7 @@ class DurationFieldModelWithDefault(models.Model):
     duration = models.DurationField(default=timedelta(1,0))
 
     class Meta:
-        app_label = "djangae"
+        app_label = "gcloudc"
 
 
 class DurationFieldModelTests(TestCase):
@@ -325,10 +431,19 @@ class ModelWithNonNullableFieldAndDefaultValueTests(TestCase):
 
         instance = ModelWithNonNullableFieldAndDefaultValue.objects.create(some_field=1)
 
-        entity = datastore.Get(datastore.Key.from_path(ModelWithNonNullableFieldAndDefaultValue._meta.db_table,
-                               instance.pk, namespace=connection.settings_dict["NAMESPACE"]))
+        from django.db import connections
+        gclient = connections.all()[0].connection.gclient
+
+        key = gclient.key(
+            ModelWithNonNullableFieldAndDefaultValue._meta.db_table,
+            instance.pk
+        )
+
+        entity = gclient.get(key)
+
         del entity["some_field"]
-        datastore.Put(entity)
+
+        gclient.put(entity)
 
         instance.refresh_from_db()
 

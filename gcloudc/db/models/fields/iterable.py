@@ -401,4 +401,4 @@ def _serialize_value(value):
     elif not isinstance(value, six.string_types):
         value = str(value)
 
-    return "'{0}'".format(value.encode('utf-8'))
+    return "'{0}'".format(value)

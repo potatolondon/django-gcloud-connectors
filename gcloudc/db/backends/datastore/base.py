@@ -338,6 +338,8 @@ class DatabaseOperations(BaseDatabaseOperations):
                 # round() always returns a float, which has a smaller max value than an int
                 # so only round() it if it's already a float
                 value = round(value)
+            if isinstance(value, datetime.timedelta):
+                value = value.total_seconds() * 1000000.0
             value = int(value)
         elif db_type == 'float':
             value = float(value)
@@ -348,7 +350,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             # We encode to bytes, as that's what the Cloud Datastore API expects
             # we use ASCII to make sure there's no funky unicode data, it should
             # be binary
-            value = value.encode("ascii")
+            value = bytes(value)
         elif db_type == 'decimal':
             value = self.adapt_decimalfield_value(value, field.max_digits, field.decimal_places)
         elif db_type in ('list', 'set'):

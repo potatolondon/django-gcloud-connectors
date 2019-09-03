@@ -101,6 +101,7 @@ class WhereNode(object):
             target_field=None):
 
         # We need access to the Datastore client to access the Key factory
+        connections[self.using].ensure_connection()
         gclient = connections[self.using].connection.gclient
 
         assert column
