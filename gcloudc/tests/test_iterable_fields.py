@@ -225,7 +225,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'list_field': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'list_field': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -241,7 +241,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'list_field': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'list_field': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -257,7 +257,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'set_field': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'set_field': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -273,7 +273,7 @@ class IterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'set_field': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'set_field': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -290,4 +290,3 @@ class IterableFieldTests(TestCase):
 
         new_obj = next(serializers.deserialize('json', data)).object
         self.assertEqual(new_obj.set_field, set(['foo', 'bar']))
-

@@ -338,6 +338,7 @@ class DatabaseOperations(BaseDatabaseOperations):
                 # round() always returns a float, which has a smaller max value than an int
                 # so only round() it if it's already a float
                 value = round(value)
+
             value = int(value)
         elif db_type == 'float':
             value = float(value)
@@ -348,7 +349,8 @@ class DatabaseOperations(BaseDatabaseOperations):
             # We encode to bytes, as that's what the Cloud Datastore API expects
             # we use ASCII to make sure there's no funky unicode data, it should
             # be binary
-            value = value.encode("ascii")
+            if isinstance(value, str):
+                value = value.encode("ascii")
         elif db_type == 'decimal':
             value = self.adapt_decimalfield_value(value, field.max_digits, field.decimal_places)
         elif db_type in ('list', 'set'):
@@ -545,6 +547,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     autocommits_when_autocommit_is_off = True
     uses_savepoints = False
     allows_auto_pk_0 = False
+    has_native_duration_field = False
 
 
 class DatabaseWrapper(BaseDatabaseWrapper):

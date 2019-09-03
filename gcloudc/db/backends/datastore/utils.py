@@ -197,7 +197,9 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
         # If value is None, but there is a default, and the field is not nullable then we should populate it
         # Otherwise thing get hairy when you add new fields to models
         if value is None and _field.has_default() and not _field.null:
-            value = connection.ops.value_for_db(_field.get_default(), _field)
+            # We need to pass the default through get_db_prep_save to properly do the conversion
+            # this is how
+            value = _field.get_db_prep_save(_field.get_default(), connection)
 
         if check_null and (not _field.null and not _field.primary_key) and value is None:
             raise IntegrityError(

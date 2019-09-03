@@ -1,94 +1,40 @@
 
-from . import TestCase
-from django.db import models
+
+from datetime import timedelta
+
+from django.core.exceptions import ValidationError
+from django.core.validators import EmailValidator
+from django.db import (
+    connection,
+    models,
+)
+from django.test import override_settings
+from gcloudc.db.models.fields.charfields import (
+    CharField,
+    CharOrNoneField,
+)
 from gcloudc.db.models.fields.computed import ComputedCharField
+from google.cloud import datastore
+
+from . import TestCase
 
 
-from django.core.exceptions import ImproperlyConfigured
+class BinaryFieldModel(models.Model):
+    binary = models.BinaryField(null=True)
 
 
+class ModelWithCharField(models.Model):
+    char_field_with_max = CharField(
+        max_length=10, default='', blank=True
+    )
 
+    char_field_without_max = CharField(
+        default='', blank=True
+    )
 
-class JSONFieldModelTests(TestCase):
-
-    def test_invalid_data_in_datastore_doesnt_throw_an_error(self):
-        """
-            If invalid data is found while reading the entity data, then
-            we should silently ignore the error and just return the data as-is
-            rather than converting to list/dict.
-            The reason is that if we blow up on load, then there's no way to load the
-            entity (in Django) to repair the data. This is also consistent with the behaviour
-            of Django when (for example) you load a NULL from the database into a field that is
-            non-nullable. The field value will still be None when read.
-        """
-        entity = datastore.Entity(JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"]["NAMESPACE"])
-        entity["json_field"] = "bananas"
-        datastore.Put(entity)
-
-        instance = JSONFieldModel.objects.get(pk=1)
-        self.assertEqual(instance.json_field, "bananas")
-
-    def test_object_pairs_hook_with_ordereddict(self):
-        items = [('first', 1), ('second', 2), ('third', 3), ('fourth', 4)]
-        od = OrderedDict(items)
-
-        thing = JSONFieldModel(json_field=od)
-        thing.save()
-
-        thing = JSONFieldModel.objects.get()
-        self.assertEqual(od, thing.json_field)
-
-    def test_object_pairs_hook_with_normal_dict(self):
-        """
-        Check that dict is not stored as OrderedDict if
-        object_pairs_hook is not set
-        """
-
-        # monkey patch field
-        field = JSONFieldModel._meta.get_field('json_field')
-        field.use_ordered_dict = False
-
-        normal_dict = {'a': 1, 'b': 2, 'c': 3}
-
-        thing = JSONFieldModel(json_field=normal_dict)
-        self.assertFalse(isinstance(thing.json_field, OrderedDict))
-        thing.save()
-
-        thing = JSONFieldModel.objects.get()
-        self.assertFalse(isinstance(thing.json_field, OrderedDict))
-
-        field.use_ordered_dict = True
-
-    def test_float_values(self):
-        """ Tests that float values in JSONFields are correctly serialized over repeated saves.
-            Regression test for 46e685d4, which fixes floats being returned as strings after a second save.
-        """
-        test_instance = JSONFieldModel(json_field={'test': 0.1})
-        test_instance.save()
-
-        test_instance = JSONFieldModel.objects.get()
-        test_instance.save()
-
-        test_instance = JSONFieldModel.objects.get()
-        self.assertEqual(test_instance.json_field['test'], 0.1)
-
-    def test_defaults_are_handled_as_pythonic_data_structures(self):
-        """ Tests that default values are handled as python data structures and
-            not as strings. This seems to be a regression after changes were
-            made to remove Subfield from the JSONField and simply use TextField
-            instead.
-        """
-        thing = JSONFieldModel()
-        self.assertEqual(thing.json_field, {})
-
-    def test_default_value_correctly_handled_as_data_structure(self):
-        """ Test that default value - if provided is not transformed into
-            string anymore. Previously we needed string, since we used
-            SubfieldBase in JSONField. Since it is now deprecated we need
-            to change handling of default value.
-        """
-        thing = JSONFieldWithDefaultModel()
-        self.assertEqual(thing.json_field, {})
+    char_field_as_email = CharField(
+        max_length=100, validators=[EmailValidator(message='failed')], blank=True
+    )
 
 
 class CharFieldModelTests(TestCase):
@@ -135,9 +81,13 @@ class CharFieldModelTests(TestCase):
                 test_char_field = CharField(max_length=1501)
         except AssertionError as e:
             self.assertEqual(
-                e.message,
+                str(e),
                 'CharFields max_length must not be greater than 1500 bytes.',
             )
+
+
+class ModelWithCharOrNoneField(models.Model):
+    char_or_none_field = CharOrNoneField(max_length=100)
 
 
 class CharOrNoneFieldTests(TestCase):
@@ -256,6 +206,10 @@ class BinaryFieldModelTests(TestCase):
         assert(readout.binary == self.binary_value)
 
 
+class CharFieldModel(models.Model):
+    char_field = models.CharField(max_length=500)
+
+
 class CharFieldModelTest(TestCase):
 
     def test_query(self):
@@ -289,10 +243,7 @@ class CharFieldModelTest(TestCase):
 
 
 class DurationFieldModelWithDefault(models.Model):
-    duration = models.DurationField(default=timedelta(1,0))
-
-    class Meta:
-        app_label = "djangae"
+    duration = models.DurationField(default=timedelta(1, 0))
 
 
 class DurationFieldModelTests(TestCase):
@@ -300,12 +251,12 @@ class DurationFieldModelTests(TestCase):
     def test_creates_with_default(self):
         instance = DurationFieldModelWithDefault()
 
-        self.assertEqual(instance.duration, timedelta(1,0))
+        self.assertEqual(instance.duration, timedelta(1, 0))
 
         instance.save()
 
         readout = DurationFieldModelWithDefault.objects.get(pk=instance.pk)
-        self.assertEqual(readout.duration, timedelta(1,0))
+        self.assertEqual(readout.duration, timedelta(1, 0))
 
     def test_none_saves_as_default(self):
         instance = DurationFieldModelWithDefault()
@@ -314,7 +265,11 @@ class DurationFieldModelTests(TestCase):
         instance.save()
 
         readout = DurationFieldModelWithDefault.objects.get(pk=instance.pk)
-        self.assertEqual(readout.duration, timedelta(1,0))
+        self.assertEqual(readout.duration, timedelta(1, 0))
+
+
+class ModelWithNonNullableFieldAndDefaultValue(models.Model):
+    some_field = models.IntegerField(null=False, default=1086)
 
 
 # ModelWithNonNullableFieldAndDefaultValueTests verifies that we maintain same
@@ -334,14 +289,10 @@ class ModelWithNonNullableFieldAndDefaultValueTests(TestCase):
 
         return instance
 
-    @disable_cache()
     def test_none_in_db_reads_as_none_in_model(self):
-
         instance = self._create_instance_with_null_field_value()
-
         self.assertIsNone(instance.some_field)
 
-    @disable_cache()
     def test_none_in_model_saved_as_default(self):
 
         instance = self._create_instance_with_null_field_value()
@@ -350,4 +301,3 @@ class ModelWithNonNullableFieldAndDefaultValueTests(TestCase):
         instance.refresh_from_db()
 
         self.assertEqual(instance.some_field, 1086)
-        
