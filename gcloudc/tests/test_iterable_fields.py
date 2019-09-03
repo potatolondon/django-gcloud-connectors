@@ -11,7 +11,7 @@ from gcloudc.db.models.fields.related import RelatedListField, RelatedSetField
 from gcloudc.db.models.fields.charfields import CharField
 
 
-class ISOther(models.Model):
+class IterableIterableRelatedModel(models.Model):
     name = models.CharField(max_length=500)
 
     def __str__(self):
@@ -21,7 +21,7 @@ class ISOther(models.Model):
         app_label = "gcloudc"
 
 
-class IterableFieldsWithValidatorsModel(models.Model):
+class IterableIterableFieldsWithValidatorsModel(models.Model):
     set_field = SetField(
         models.CharField(max_length=100),
         min_length=2, max_length=3, blank=False
@@ -33,11 +33,11 @@ class IterableFieldsWithValidatorsModel(models.Model):
     )
 
     related_set = RelatedSetField(
-        ISOther, min_length=2, max_length=3, blank=False
+        IterableIterableRelatedModel, min_length=2, max_length=3, blank=False
     )
 
     related_list = RelatedListField(
-        ISOther,
+        IterableIterableRelatedModel,
         related_name="iterable_list",
         min_length=2, max_length=3, blank=False
     )
@@ -204,8 +204,8 @@ class IterableFieldTests(TestCase):
         """
         others = []
         for x in range(2):
-            others.append(ISOther.objects.create())
-        instance = IterableFieldsWithValidatorsModel(
+            others.append(IterableIterableRelatedModel.objects.create())
+        instance = IterableIterableFieldsWithValidatorsModel(
             related_set=set(others),  # not being tested here
             related_list=others,  # not being tested here
             set_field=set(["1", "2"]),
@@ -216,8 +216,8 @@ class IterableFieldTests(TestCase):
     def test_list_field_max_length_invalid(self):
         others = []
         for x in range(2):
-            others.append(ISOther.objects.create())
-        instance = IterableFieldsWithValidatorsModel(
+            others.append(IterableIterableRelatedModel.objects.create())
+        instance = IterableIterableFieldsWithValidatorsModel(
             related_set=set(others),  # not being tested here
             related_list=others,  # not being tested here
             set_field=set(["1", "2"]),  # not being tested here
@@ -232,8 +232,8 @@ class IterableFieldTests(TestCase):
     def test_list_field_min_length_invalid(self):
         others = []
         for x in range(2):
-            others.append(ISOther.objects.create())
-        instance = IterableFieldsWithValidatorsModel(
+            others.append(IterableIterableRelatedModel.objects.create())
+        instance = IterableIterableFieldsWithValidatorsModel(
             related_set=set(others),  # not being tested here
             related_list=others,  # not being tested here
             set_field=set(["1", "2"]),  # not being tested here
@@ -248,8 +248,8 @@ class IterableFieldTests(TestCase):
     def test_set_field_max_length_invalid(self):
         others = []
         for x in range(2):
-            others.append(ISOther.objects.create())
-        instance = IterableFieldsWithValidatorsModel(
+            others.append(IterableIterableRelatedModel.objects.create())
+        instance = IterableIterableFieldsWithValidatorsModel(
             related_set=set(others),  # not being tested here
             related_list=others,  # not being tested here
             list_field=["1", "2"],  # not being tested here
@@ -264,8 +264,8 @@ class IterableFieldTests(TestCase):
     def test_set_field_min_length_invalid(self):
         others = []
         for x in range(2):
-            others.append(ISOther.objects.create())
-        instance = IterableFieldsWithValidatorsModel(
+            others.append(IterableIterableRelatedModel.objects.create())
+        instance = IterableIterableFieldsWithValidatorsModel(
             related_set=set(others),  # not being tested here
             related_list=others,  # not being tested here
             list_field=["1", "2"],  # not being tested here

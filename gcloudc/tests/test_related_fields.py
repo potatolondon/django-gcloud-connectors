@@ -18,6 +18,7 @@ from gcloudc.db.models.fields.iterable import (
     SetField
 )
 
+
 class ISOther(models.Model):
     name = models.CharField(max_length=500)
 
@@ -62,24 +63,14 @@ class IterableFieldsWithValidatorsModel(models.Model):
     related_set = RelatedSetField(ISOther, min_length=2, max_length=3, blank=False)
     related_list = RelatedListField(ISOther, related_name="iterable_list", min_length=2, max_length=3, blank=False)
 
-    class Meta:
-        app_label = "gcloudc"
-
-
 
 class ModelDatabaseA(models.Model):
     set_of_bs = RelatedSetField('ModelDatabaseB', related_name='+')
     list_of_bs = RelatedListField('ModelDatabaseB', related_name='+')
 
-    class Meta:
-        app_label = 'gcloudc'
-
 
 class ModelDatabaseB(models.Model):
     test_database = 'ns1'
-
-    class Meta:
-        app_label = 'gcloudc'
 
 
 class IterableRelatedModel(models.Model):
@@ -90,7 +81,6 @@ class IterableRelatedModel(models.Model):
 class RelationWithOverriddenDbTable(models.Model):
     class Meta:
         db_table = "bananarama"
-        app_label = "gcloudc"
 
 
 class Post(models.Model):
@@ -103,11 +93,8 @@ class Tag(models.Model):
     name = models.CharField(max_length=64)
 
 
-class CharFieldModel(models.Model):
+class RelatedCharFieldModel(models.Model):
     char_field = CharField(max_length=500)
-
-    class Meta:
-        app_label = "gcloudc"
 
 
 class StringPkModel(models.Model):
@@ -120,7 +107,7 @@ class IterableRelatedWithNonIntPkModel(models.Model):
 
 
 class RelatedListFieldRemoveDuplicatesModel(models.Model):
-    related_list_field = RelatedListField(CharFieldModel, remove_duplicates=True)
+    related_list_field = RelatedListField(RelatedCharFieldModel, remove_duplicates=True)
 
 
 class RelatedListFieldRemoveDuplicatesForm(forms.ModelForm):
@@ -179,7 +166,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_list': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'related_list': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -195,7 +182,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_list': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'related_list': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -211,7 +198,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_set': [u'Ensure this field has at most 3 items (it has 5).']}",
+            "{'related_set': ['Ensure this field has at most 3 items (it has 5).']}",
             instance.full_clean,
         )
 
@@ -227,7 +214,7 @@ class RelatedIterableFieldTests(TestCase):
         )
         self.assertRaisesMessage(
             ValidationError,
-            "{'related_set': [u'Ensure this field has at least 2 items (it has 1).']}",
+            "{'related_set': ['Ensure this field has at least 2 items (it has 1).']}",
             instance.full_clean,
         )
 
@@ -363,7 +350,7 @@ class RelatedListFieldModelTests(TestCase):
         make sure that remove_duplicates option works fine for RelatedListField
         """
         instance_one, instance_two, instance_three, instance_four, instance_five = [
-            CharFieldModel.objects.create(
+            RelatedCharFieldModel.objects.create(
                 char_field=str(x)
             ) for x in range(5)
         ]
@@ -800,4 +787,3 @@ class TestGenericRelationField(TestCase):
         self.assertTrue(form.is_valid())
         instance = form.save()
         self.assertEqual(related, instance.relation_to_anything)
-

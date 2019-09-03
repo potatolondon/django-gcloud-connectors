@@ -4,7 +4,7 @@ from collections import OrderedDict
 from django.conf import settings
 from django.db import models
 
-from djangae.db.models.fields import JSONField
+from gcloudc.db.models.fields.json import JSONField
 
 
 class JSONFieldModel(models.Model):

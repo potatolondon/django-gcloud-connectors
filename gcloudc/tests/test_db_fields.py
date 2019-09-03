@@ -13,7 +13,7 @@ from gcloudc.db.models.fields.charfields import (
     CharField,
     CharOrNoneField,
 )
-from gcloudc.db.models.fields.computed import ComputedCharField
+from gcloudc.db.models.fields.computed import ComputedCharField, ComputedBooleanField
 from google.cloud import datastore
 
 from . import TestCase
