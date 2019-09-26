@@ -439,7 +439,7 @@ class UniqueQuery(object):
             return self._gae_query.Run(limit=limit, offset=offset)
 
         ret = caching.get_from_cache(self._identifier, self._namespace)
-        if ret is not None and not utils.entity_matches_query(ret, self._gae_query):
+        if ret is not None and not entity_matches_query(ret, self._gae_query):
             ret = None
 
         if ret is None:
@@ -453,7 +453,7 @@ class UniqueQuery(object):
             # Do a consistent get so we don't cache stale data, and recheck the result matches the query
             ret = [
                 x for x in rpc.Get(keys)
-                if x and utils.entity_matches_query(x, self._gae_query)
+                if x and entity_matches_query(x, self._gae_query)
             ]
             if len(ret) == 1:
                 caching.add_entities_to_cache(
