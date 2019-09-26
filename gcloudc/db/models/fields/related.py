@@ -97,7 +97,7 @@ class OrderedQuerySet(QuerySet):
                 pk_col = locate_pk_column(clone.query)
                 if pk_col is None:
                     # Manually add the PK to the result set
-                    clone = clone.values_list(*(["pk"] + values_select))
+                    clone = clone.values_list(*(["pk"] + list(values_select)))
                     values_select = [x.field.name for x in clone.query.select]
                     pk_col = 0
                     pk_added = True

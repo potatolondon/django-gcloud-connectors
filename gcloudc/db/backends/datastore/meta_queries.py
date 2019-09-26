@@ -265,7 +265,8 @@ def _convert_entity_based_on_query_options(entity, keys_only, projection):
         return entity.key
 
     if projection:
-        for k in entity.keys()[:]:
+        keys = list(entity.keys())
+        for k in keys:
             if k not in list(projection) + [POLYMODEL_CLASS_ATTRIBUTE]:
                 del entity[k]
 
@@ -361,7 +362,7 @@ class QueryByKeys(object):
             if len(multi_query) == 1:
                 results = multi_query[0].fetch(limit=to_fetch)
             else:
-                results = AsyncMultiQuery(multi_query, orderings).Run(limit=to_fetch)
+                results = AsyncMultiQuery(multi_query, orderings).fetch(limit=to_fetch)
         else:
             results = transaction._rpc(self.connection).get(
                 [x for x in self.queries_by_key.keys()]

@@ -149,7 +149,9 @@ class Cursor(object):
             if entity is None:
                 break
 
-            result.append(entity)
+            # Python DB API suggests a list of tuples, and returning
+            # a list-of-lists breaks some tests
+            result.append(tuple(entity))
 
         return result
 
@@ -201,7 +203,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return '', []
 
     def get_db_converters(self, expression):
-        converters = super(DatabaseOperations, self).get_db_converters(expression)
+        converters = super().get_db_converters(expression)
 
         db_type = expression.field.db_type(self.connection)
         internal_type = expression.field.get_internal_type()
