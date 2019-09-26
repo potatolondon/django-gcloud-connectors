@@ -17,8 +17,6 @@ from gcloudc.forms.fields import (
 
 from django.db.models.query import FlatValuesListIterable
 
-import django
-
 # gcloudc
 from gcloudc.core.validators import MinItemsValidator, MaxItemsValidator
 from gcloudc.db.models.fields.iterable import (
@@ -152,12 +150,10 @@ class OrderedQuerySet(QuerySet):
         if not isinstance(k, (slice,) + (int,)):
             raise TypeError
 
-        assert (
+        assert(
             (not isinstance(k, slice) and (k >= 0)) or
-            (isinstance(k, slice) and
-            (k.start is None or k.start >= 0) and
-            (k.stop is None or k.stop >= 0))
-        ), "Negative indexing is not supported."
+            (isinstance(k, slice) and (k.start is None or k.start >= 0) and (k.stop is None or k.stop >= 0))
+        )
 
         if self._result_cache is not None:
             return self._result_cache[k]
@@ -232,7 +228,7 @@ class RelatedIteratorManagerBase(object):
             lambda inst: inst._prefetch_instance_id,
             lambda obj: obj.pk,
             False,
-            self.field.name # Use the field name as the cache name
+            self.field.name  # Use the field name as the cache name
         )
 
     def get_queryset(self):
@@ -419,33 +415,15 @@ class RelatedIteratorField(ForeignObject):
 
         min_length, max_length = self._sanitize_min_and_max_length(kwargs)
 
-        if django.VERSION[1] == 8:
-            # in Django 1.8 ForeignObject uses get_lookup_constraint instead
-            # of get_lookup. We want to override it (but only for Django 1.8)
-            self.get_lookup_constraint = self._get_lookup_constraint
-
-            # Django 1.8 doesn't support the rel_class attribute so we have to pass it up
-            # manually.
-            kwargs["rel"] = self.rel_class(
-                self, to,
-                related_name=related_name,
-                related_query_name=kwargs.get("related_query_name"),
-                limit_choices_to=limit_choices_to,
-                parent_link=kwargs.get("parent_link"),
-                on_delete=on_delete
-            )
-
-            super(RelatedIteratorField, self).__init__(to, from_fields, to_fields, **kwargs)
-        else:
-            super(RelatedIteratorField, self).__init__(
-                to,
-                on_delete,
-                from_fields,
-                to_fields,
-                related_name=related_name,
-                limit_choices_to=limit_choices_to,
-                **kwargs
-            )
+        super(RelatedIteratorField, self).__init__(
+            to,
+            on_delete,
+            from_fields,
+            to_fields,
+            related_name=related_name,
+            limit_choices_to=limit_choices_to,
+            **kwargs
+        )
 
         # Now that self.validators has been set up, we can add the min/max legnth validators
         if min_length is not None:
@@ -461,9 +439,11 @@ class RelatedIteratorField(ForeignObject):
             )
 
         if on_delete in (models.SET_NULL, models.SET_DEFAULT):
-            raise ImproperlyConfigured("Using an on_delete value of {} will cause undesirable behavior"
-                             " (e.g. wipeout the entire list) if you really want to do that "
-                             "then use models.SET instead and return an empty list/set")
+            raise ImproperlyConfigured(
+                "Using an on_delete value of {} will cause undesirable behavior"
+                " (e.g. wipeout the entire list) if you really want to do that "
+                "then use models.SET instead and return an empty list/set"
+            )
 
     def _sanitize_min_and_max_length(self, kwargs):
         # Pop the 'min_length' and 'max_length' from the kwargs, if they're there, as this avoids
@@ -853,4 +833,3 @@ class GenericRelationField(models.Field):
 
     def get_validator_unique_lookup_type(self):
         raise NotImplementedError()
-
