@@ -8,6 +8,9 @@ from gcloudc import context_decorator
 from google.cloud import exceptions
 
 
+TRANSACTION_ENTITY_LIMIT = 500
+
+
 def in_atomic_block(using='default'):
     connection = connections[using].connection
     return bool(connection.gclient.current_transaction)
@@ -32,6 +35,21 @@ class Transaction(object):
         unsigned = uuid.uuid4().int & (1 << 32) - 1
         return unsigned
 
+    def key(self, *args, **kwargs):
+        """
+        Interface to the Datastore client Key factory.
+        """
+        return self._connection.gclient.key(*args, **kwargs)
+
+    def get(self, key_or_keys, missing=None):
+        # For some reason Datastore Transactions don't provide their
+        # own get
+        if hasattr(key_or_keys, "__iter__"):
+            getter = self._connection.gclient.get_multi
+            return getter(key_or_keys, missing=missing)
+        else:
+            return self._connection.gclient.get(key_or_keys)
+
     def put(self, entity):
         putter = (
             self._datastore_transaction.put
@@ -44,36 +62,28 @@ class Transaction(object):
         assert(entity.key)
         return entity.key
 
-    def key(self, *args, **kwargs):
-        return self._connection.gclient.key(*args, **kwargs)
+    def delete(self, key_or_keys):
+        """
+        Delete an entity or entities using a different API depending if we
+        are currently in a transaction batch or not.
+        """
+        # if we've got an iterable of keys....
+        if hasattr(key_or_keys, '__iter__'):
+            # there is no delete_multi on the transaction object directly
+            if self._datastore_transaction:
+                for key in key_or_keys:
+                    self._datastore_transaction.delete(key)
+            else:
+                self._connection.gclient.delete_multi(key_or_keys)
+        else:
+            if self._datastore_transaction:
+                self._datastore_transaction.delete(key_or_keys)
+            else:
+                # delete() is just a wrapper around delete_multi anyway...
+                self._connection.gclient.delete_multi([key_or_keys])
 
     def query(self, *args, **kwargs):
         return self._connection.gclient.query(*args, **kwargs)
-
-    def get(self, key_or_keys):
-        # For some reason Datastore Transactions don't provide their
-        # own get
-        if hasattr(key_or_keys, "__iter__"):
-            getter = self._connection.gclient.get_multi
-        else:
-            getter = self._connection.gclient.get
-        return getter(key_or_keys)
-
-    def delete(self, key_or_keys):
-        if hasattr(key_or_keys, '__iter__'):
-            deleter = (
-                self._datastore_transaction.delete_multi
-                if self._datastore_transaction
-                else self._connection.gclient.delete_multi
-            )
-        else:
-            deleter = (
-                self._datastore_transaction.delete
-                if self._datastore_transaction
-                else self._connection.gclient.delete
-            )
-
-        return deleter(key_or_keys)
 
     def enter(self):
         self._seen_keys = set()
@@ -96,12 +106,7 @@ class Transaction(object):
         if not self._datastore_transaction:
             return False
 
-        key = rpc.Key.from_path(
-            instance._meta.db_table,
-            instance.pk,
-            namespace=self._connection.settings_dict.get('NAMESPACE', '')
-        )
-
+        key = self.key(instance._meta.db_table, instance.pk)
         return key in self._seen_keys
 
     def refresh_if_unread(self, instance):
@@ -253,7 +258,21 @@ class TransactionFailedError(Exception):
 
 
 class AtomicDecorator(context_decorator.ContextDecorator):
-    VALID_ARGUMENTS = ("independent", "mandatory", "using", "read_only", "enable_cache")
+    """
+    Exposes a decorator based API for transaction use. This in turn allows us
+    to define the expected behaviour of each transaction via kwargs.
+
+    For example passing `independent` creates a new transaction instance using
+    the Datastore client under the hood. This is useful to workaround the
+    limitations of 500 entity writes per transaction/batch.
+    """
+    VALID_ARGUMENTS = (
+        "independent",
+        "mandatory",
+        "using",
+        "read_only",
+        "enable_cache",
+    )
 
     @classmethod
     def _do_enter(cls, state, decorator_args):
@@ -278,7 +297,7 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         if independent:
             new_transaction = IndependentTransaction(connection)
         elif in_atomic_block():
-            new_transaction = NestedTransaction()
+            new_transaction = NestedTransaction(connection)
         elif mandatory:
             raise TransactionFailedError(
                 "You've specified that an outer transaction is mandatory, but one doesn't exist"
