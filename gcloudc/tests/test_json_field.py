@@ -6,6 +6,8 @@ from django.db import models
 
 from gcloudc.db.models.fields.json import JSONField
 
+from google.cloud.datastore.entity import Entity
+
 
 class JSONFieldModel(models.Model):
     json_field = JSONField(use_ordered_dict=True, blank=True)
@@ -27,9 +29,12 @@ class JSONFieldModelTests(TestCase):
             of Django when (for example) you load a NULL from the database into a field that is
             non-nullable. The field value will still be None when read.
         """
-        entity = datastore.Entity(JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"]["NAMESPACE"])
+        entity = Entity(
+            JSONFieldModel._meta.db_table, id=1,
+            namespace=settings.DATABASES["default"].get("NAMESPACE", "")
+        )
         entity["json_field"] = "bananas"
-        datastore.Put(entity)
+        entity.put()
 
         instance = JSONFieldModel.objects.get(pk=1)
         self.assertEqual(instance.json_field, "bananas")
