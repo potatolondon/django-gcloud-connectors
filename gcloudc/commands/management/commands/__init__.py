@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 
 
 _COMPONENTS_LIST_COMMAND = "gcloud components list --format=json".split()
-_REQUIRED_COMPONENTS = set(['beta', 'cloud-datastore-emulator', 'core'])
+_REQUIRED_COMPONENTS = set(["beta", "cloud-datastore-emulator", "core"])
 
 _BASE_COMMAND = "gcloud beta emulators datastore start --consistency=1.0 --quiet --project=test".split()
 _DEFAULT_PORT = 9090
@@ -29,8 +29,10 @@ class CloudDatastoreRunner:
         parser.add_argument("--no-datastore", action="store_false", dest="datastore", default=True)
         parser.add_argument("--datastore-port", action="store", dest="port", default=_DEFAULT_PORT)
         parser.add_argument(
-            "--use-memory-datastore", action="store_true", dest="use_memory_datastore",
-            default=self.USE_MEMORY_DATASTORE_BY_DEFAULT
+            "--use-memory-datastore",
+            action="store_true",
+            dest="use_memory_datastore",
+            default=self.USE_MEMORY_DATASTORE_BY_DEFAULT,
         )
 
     def execute(self, *args, **kwargs):
@@ -44,9 +46,10 @@ class CloudDatastoreRunner:
             self._stop_emulator()
 
     def _check_gcloud_components(self):
-        finished_process = subprocess.run(_COMPONENTS_LIST_COMMAND, stdout=subprocess.PIPE, encoding='utf-8')
-        installed_components = \
-            set([cp['id'] for cp in json.loads(finished_process.stdout) if cp['current_version_string'] is not None])
+        finished_process = subprocess.run(_COMPONENTS_LIST_COMMAND, stdout=subprocess.PIPE, encoding="utf-8")
+        installed_components = set(
+            [cp["id"] for cp in json.loads(finished_process.stdout) if cp["current_version_string"] is not None]
+        )
 
         if not _REQUIRED_COMPONENTS.issubset(installed_components):
             raise RuntimeError(
@@ -65,9 +68,7 @@ class CloudDatastoreRunner:
         return os.path.join(BASE_DIR, ".datastore")
 
     def _get_args(self, **kwargs):
-        args = [
-            "--host-port=127.0.0.1:%s" % kwargs.get("port", _DEFAULT_PORT)
-        ]
+        args = ["--host-port=127.0.0.1:%s" % kwargs.get("port", _DEFAULT_PORT)]
 
         if kwargs["use_memory_datastore"]:
             print("Using in-memory datastore")
@@ -94,9 +95,7 @@ class CloudDatastoreRunner:
                 time.sleep(1)
                 if failures > 5:
                     # Only start logging if this becomes persistent
-                    logging.exception(
-                        "Error connecting to the Cloud Datastore Emulator. Retrying..."
-                    )
+                    logging.exception("Error connecting to the Cloud Datastore Emulator. Retrying...")
                 continue
 
             if response.status == 200:
@@ -105,9 +104,7 @@ class CloudDatastoreRunner:
                 break
 
             if (datetime.now() - start).total_seconds() > TIMEOUT:
-                raise RuntimeError(
-                    "Unable to start Cloud Datastore Emulator. Please check the logs."
-                )
+                raise RuntimeError("Unable to start Cloud Datastore Emulator. Please check the logs.")
 
             time.sleep(1)
 
@@ -118,10 +115,7 @@ class CloudDatastoreRunner:
         os.environ["DATASTORE_PROJECT_ID"] = "test"
 
         env = os.environ.copy()
-        self._process = subprocess.Popen(
-            _BASE_COMMAND + self._get_args(**kwargs),
-            env=env
-        )
+        self._process = subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env)
 
         self._wait_for_datastore()
 

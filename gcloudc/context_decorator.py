@@ -1,4 +1,3 @@
-
 import threading
 import functools
 
@@ -6,6 +5,7 @@ import functools
 # Because decorators are only instantiated once per function, we need to make sure any state
 # stored on them is both thread-local (to prevent function calls in different threads
 # interacting with each other) and safe to use recursively (by using a stack of state)
+
 
 class ContextState(object):
     "Stores state per-call of the ContextDecorator"
@@ -20,6 +20,7 @@ class ContextDecorator(object):
         state is a thread.local which can store state for each enter/exit. Decorator args holds
         any arguments passed into the decorator or context manager when called.
     """
+
     VALID_ARGUMENTS = ()
 
     def __init__(self, func=None, **kwargs):
@@ -28,8 +29,8 @@ class ContextDecorator(object):
 
         # Make sure only valid decorator arguments were passed in
         if len(kwargs) > len(self.__class__.VALID_ARGUMENTS):
-            raise ValueError("Unexpected decorator arguments: {}".format(
-                set(kwargs.keys()) - set(self.__class__.VALID_ARGUMENTS))
+            raise ValueError(
+                "Unexpected decorator arguments: {}".format(set(kwargs.keys()) - set(self.__class__.VALID_ARGUMENTS))
             )
 
         self.func = func
@@ -75,7 +76,7 @@ class ContextDecorator(object):
         # self.state is a threading.local() object, so if the current thread is not the one in
         # which ContextDecorator.__init__ was called (e.g. is not the thread in which the function
         # was decorated), then the 'stack' attribute may not exist
-        if not hasattr(self.state, 'stack'):
+        if not hasattr(self.state, "stack"):
             self.state.stack = []
 
         self.state.stack.append(ContextState())

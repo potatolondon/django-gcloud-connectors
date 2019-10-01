@@ -1,4 +1,3 @@
-
 import datetime
 
 from . import TestCase
@@ -22,24 +21,14 @@ class IterableIterableRelatedModel(models.Model):
 
 
 class IterableIterableFieldsWithValidatorsModel(models.Model):
-    set_field = SetField(
-        models.CharField(max_length=100),
-        min_length=2, max_length=3, blank=False
-    )
+    set_field = SetField(models.CharField(max_length=100), min_length=2, max_length=3, blank=False)
 
-    list_field = ListField(
-        models.CharField(max_length=100),
-        min_length=2, max_length=3, blank=False
-    )
+    list_field = ListField(models.CharField(max_length=100), min_length=2, max_length=3, blank=False)
 
-    related_set = RelatedSetField(
-        IterableIterableRelatedModel, min_length=2, max_length=3, blank=False
-    )
+    related_set = RelatedSetField(IterableIterableRelatedModel, min_length=2, max_length=3, blank=False)
 
     related_list = RelatedListField(
-        IterableIterableRelatedModel,
-        related_name="iterable_list",
-        min_length=2, max_length=3, blank=False
+        IterableIterableRelatedModel, related_name="iterable_list", min_length=2, max_length=3, blank=False
     )
 
 
@@ -58,34 +47,34 @@ class IterableFieldModel(models.Model):
 class IterableFieldTests(TestCase):
     def test_filtering_on_iterable_fields(self):
         list1 = IterableFieldModel.objects.create(
-            list_field=['A', 'B', 'C', 'D', 'E', 'F', 'G'],
-            set_field=set(['A', 'B', 'C', 'D', 'E', 'F', 'G']))
+            list_field=["A", "B", "C", "D", "E", "F", "G"], set_field=set(["A", "B", "C", "D", "E", "F", "G"])
+        )
         list2 = IterableFieldModel.objects.create(
-            list_field=['A', 'B', 'C', 'H', 'I', 'J'],
-            set_field=set(['A', 'B', 'C', 'H', 'I', 'J']))
+            list_field=["A", "B", "C", "H", "I", "J"], set_field=set(["A", "B", "C", "H", "I", "J"])
+        )
 
         # filtering using __contains lookup with ListField:
-        qry = IterableFieldModel.objects.filter(list_field__contains='A')
+        qry = IterableFieldModel.objects.filter(list_field__contains="A")
         self.assertEqual(sorted(x.pk for x in qry), sorted([list1.pk, list2.pk]))
-        qry = IterableFieldModel.objects.filter(list_field__contains='H')
+        qry = IterableFieldModel.objects.filter(list_field__contains="H")
         self.assertEqual(sorted(x.pk for x in qry), [list2.pk])
 
         # filtering using __contains lookup with SetField:
-        qry = IterableFieldModel.objects.filter(set_field__contains='A')
+        qry = IterableFieldModel.objects.filter(set_field__contains="A")
         self.assertEqual(sorted(x.pk for x in qry), sorted([list1.pk, list2.pk]))
-        qry = IterableFieldModel.objects.filter(set_field__contains='H')
+        qry = IterableFieldModel.objects.filter(set_field__contains="H")
         self.assertEqual(sorted(x.pk for x in qry), [list2.pk])
 
         # filtering using __overlap lookup with ListField:
-        qry = IterableFieldModel.objects.filter(list_field__overlap=['A', 'B', 'C'])
+        qry = IterableFieldModel.objects.filter(list_field__overlap=["A", "B", "C"])
         self.assertEqual(sorted(x.pk for x in qry), sorted([list1.pk, list2.pk]))
-        qry = IterableFieldModel.objects.filter(list_field__overlap=['H', 'I', 'J'])
+        qry = IterableFieldModel.objects.filter(list_field__overlap=["H", "I", "J"])
         self.assertEqual(sorted(x.pk for x in qry), sorted([list2.pk]))
 
         # filtering using __overlap lookup with SetField:
-        qry = IterableFieldModel.objects.filter(set_field__overlap=set(['A', 'B']))
+        qry = IterableFieldModel.objects.filter(set_field__overlap=set(["A", "B"]))
         self.assertEqual(sorted(x.pk for x in qry), sorted([list1.pk, list2.pk]))
-        qry = IterableFieldModel.objects.filter(set_field__overlap=['H'])
+        qry = IterableFieldModel.objects.filter(set_field__overlap=["H"])
         self.assertEqual(sorted(x.pk for x in qry), [list2.pk])
 
     def test_empty_iterable_fields(self):
@@ -170,10 +159,7 @@ class IterableFieldTests(TestCase):
                 model = IterableFieldModel
                 fields = ("set_field", "list_field")
 
-        post_data = {
-            "set_field": [ "1", "2" ],
-            "list_field": [ "1", "2" ]
-        }
+        post_data = {"set_field": ["1", "2"], "list_field": ["1", "2"]}
 
         form = TestForm(post_data)
         self.assertTrue(form.is_valid())
@@ -183,20 +169,8 @@ class IterableFieldTests(TestCase):
         """ Having min_length=X, blank=True doesn't make any sense, especially when you consider
             that django will skip the min_length check when the value (list/set)is empty.
         """
-        self.assertRaises(
-            ImproperlyConfigured,
-            ListField,
-            CharField(max_length=100),
-            min_length=1,
-            blank=True
-        )
-        self.assertRaises(
-            ImproperlyConfigured,
-            SetField,
-            CharField(max_length=100),
-            min_length=1,
-            blank=True
-        )
+        self.assertRaises(ImproperlyConfigured, ListField, CharField(max_length=100), min_length=1, blank=True)
+        self.assertRaises(ImproperlyConfigured, SetField, CharField(max_length=100), min_length=1, blank=True)
 
     def test_list_field_set_field_min_max_lengths_valid(self):
         """ Test that when the min_legnth and max_length of a ListField and SetField are correct
@@ -256,9 +230,7 @@ class IterableFieldTests(TestCase):
             set_field=set(["1", "2", "3", "4", "5"]),
         )
         self.assertRaisesMessage(
-            ValidationError,
-            "{'set_field': ['Ensure this field has at most 3 items (it has 5).']}",
-            instance.full_clean,
+            ValidationError, "{'set_field': ['Ensure this field has at most 3 items (it has 5).']}", instance.full_clean
         )
 
     def test_set_field_min_length_invalid(self):
@@ -278,15 +250,15 @@ class IterableFieldTests(TestCase):
         )
 
     def test_list_field_serializes_and_deserializes(self):
-        obj = IterableFieldModel(list_field=['foo', 'bar'])
-        data = serializers.serialize('json', [obj])
+        obj = IterableFieldModel(list_field=["foo", "bar"])
+        data = serializers.serialize("json", [obj])
 
-        new_obj = next(serializers.deserialize('json', data)).object
-        self.assertEqual(new_obj.list_field, ['foo', 'bar'])
+        new_obj = next(serializers.deserialize("json", data)).object
+        self.assertEqual(new_obj.list_field, ["foo", "bar"])
 
     def test_set_field_serializes_and_deserializes(self):
-        obj = IterableFieldModel(set_field=set(['foo', 'bar']))
-        data = serializers.serialize('json', [obj])
+        obj = IterableFieldModel(set_field=set(["foo", "bar"]))
+        data = serializers.serialize("json", [obj])
 
-        new_obj = next(serializers.deserialize('json', data)).object
-        self.assertEqual(new_obj.set_field, set(['foo', 'bar']))
+        new_obj = next(serializers.deserialize("json", data)).object
+        self.assertEqual(new_obj.set_field, set(["foo", "bar"]))

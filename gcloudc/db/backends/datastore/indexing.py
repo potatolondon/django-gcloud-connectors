@@ -51,7 +51,7 @@ def _get_table_from_model(model_class):
 
 
 def _is_iterable(value):
-    return hasattr(value, '__iter__') and not isinstance(value, (str, bytes)) # is a list, tuple or set?
+    return hasattr(value, "__iter__") and not isinstance(value, (str, bytes))  # is a list, tuple or set?
 
 
 def _deduplicate_list(value_list):
@@ -78,9 +78,7 @@ def _merged_indexes():
     result = _app_special_indexes.copy()
     for model, indexes in (_project_special_indexes or {}).items():
         for field_name, values in indexes.items():
-            result.setdefault(
-                model, {}
-            ).setdefault(field_name, []).extend(values)
+            result.setdefault(model, {}).setdefault(field_name, []).extend(values)
     return result
 
 
@@ -90,7 +88,7 @@ def load_special_indexes(connection):
     global _last_loaded_times
     global _indexes_loaded
 
-    RUNNING_DEVSERVER = (len(sys.argv) > 1 and sys.argv[1] == 'runserver')
+    RUNNING_DEVSERVER = len(sys.argv) > 1 and sys.argv[1] == "runserver"
 
     if _indexes_loaded and not RUNNING_DEVSERVER:
         # Index files can't change if we're on production, so once they're loaded we don't need
@@ -139,9 +137,7 @@ def load_special_indexes(connection):
         # Update the app special indexes list
         for model, indexes in new_data.items():
             for field_name, values in indexes.items():
-                _app_special_indexes.setdefault(
-                    model, {}
-                ).setdefault(field_name, []).extend(values)
+                _app_special_indexes.setdefault(model, {}).setdefault(field_name, []).extend(values)
 
     _indexes_loaded = True
     logger.debug("Loaded special indexes for %d models", len(_merged_indexes()))
@@ -214,9 +210,9 @@ def add_special_index(connection, model_class, field_name, indexer, operator, va
     if _project_special_indexes is None:
         _project_special_indexes = {}
 
-    _project_special_indexes.setdefault(
-        _get_table_from_model(model_class), {}
-    ).setdefault(field_name, []).append(str(index_type))
+    _project_special_indexes.setdefault(_get_table_from_model(model_class), {}).setdefault(field_name, []).append(
+        str(index_type)
+    )
 
     write_special_indexes(connection)
 
@@ -272,16 +268,23 @@ class Indexer(object):
         """Return True if the value is indexable, False otherwise"""
         raise NotImplementedError()
 
-    def prep_value_for_database(self, value, index, **kwargs): raise NotImplementedError()
-    def prep_value_for_query(self, value, **kwargs): raise NotImplementedError()
-    def indexed_column_name(self, field_column, value, index): raise NotImplementedError()
+    def prep_value_for_database(self, value, index, **kwargs):
+        raise NotImplementedError()
+
+    def prep_value_for_query(self, value, **kwargs):
+        raise NotImplementedError()
+
+    def indexed_column_name(self, field_column, value, index):
+        raise NotImplementedError()
+
     def prep_query_operator(self, op):
         if "__" in op:
             return op.split("__")[-1]
         else:
             return "exact"  # By default do an exact operation
 
-    def prepare_index_type(self, index_type, value): return index_type
+    def prepare_index_type(self, index_type, value):
+        return index_type
 
     def unescape(self, value):
         value = value.replace("\\_", "_")
@@ -295,12 +298,12 @@ class StringIndexerMixin(object):
         models.TextField,
         models.CharField,
         models.URLField,
-        models.DateTimeField, # Django allows these for some reason
+        models.DateTimeField,  # Django allows these for some reason
         models.DateField,
         models.TimeField,
-        models.IntegerField, # SQL coerces ints to strings, and so we need these too
+        models.IntegerField,  # SQL coerces ints to strings, and so we need these too
         models.PositiveIntegerField,
-        models.AutoField
+        models.AutoField,
     )
 
     def handles(self, field, operator):
@@ -315,8 +318,9 @@ class StringIndexerMixin(object):
         if isinstance(field, self.STRING_FIELDS):
             return True
         elif (
-            isinstance(field, (iterable.ListField, iterable.SetField)) and
-            field.item_field_type.__class__ in self.STRING_FIELDS and operator.startswith("item__")
+            isinstance(field, (iterable.ListField, iterable.SetField))
+            and field.item_field_type.__class__ in self.STRING_FIELDS
+            and operator.startswith("item__")
         ):
             return True
         return False
@@ -326,10 +330,7 @@ class DateIndexerMixin(object):
     def handles(self, field, operator):
         from gcloudc.db.models.fields import iterable
 
-        DATE_FIELDS = (
-            models.DateField,
-            models.DateTimeField
-        )
+        DATE_FIELDS = (models.DateField, models.DateTimeField)
 
         if operator.split("__")[0] != self.OPERATOR:
             return False
@@ -337,8 +338,9 @@ class DateIndexerMixin(object):
         if isinstance(field, DATE_FIELDS):
             return True
         elif (
-            isinstance(field, (iterable.ListField, iterable.SetField)) and
-            field.item_field_type.__class__ in DATE_FIELDS and operator.startswith("item__")
+            isinstance(field, (iterable.ListField, iterable.SetField))
+            and field.item_field_type.__class__ in DATE_FIELDS
+            and operator.startswith("item__")
         ):
             return True
 
@@ -349,10 +351,7 @@ class TimeIndexerMixin(object):
     def handles(self, field, operator):
         from gcloudc.db.models.fields import iterable
 
-        TIME_FIELDS = (
-            models.TimeField,
-            models.DateTimeField
-        )
+        TIME_FIELDS = (models.TimeField, models.DateTimeField)
 
         if operator.split("__")[0] != self.OPERATOR:
             return False
@@ -360,15 +359,17 @@ class TimeIndexerMixin(object):
         if isinstance(field, TIME_FIELDS):
             return True
         elif (
-            isinstance(field, (iterable.ListField, iterable.SetField)) and
-            field.item_field_type.__class__ in TIME_FIELDS and operator.startswith("item__")
+            isinstance(field, (iterable.ListField, iterable.SetField))
+            and field.item_field_type.__class__ in TIME_FIELDS
+            and operator.startswith("item__")
         ):
             return True
 
         return False
 
+
 class IExactIndexer(StringIndexerMixin, Indexer):
-    OPERATOR = 'iexact'
+    OPERATOR = "iexact"
 
     def validate_can_be_indexed(self, value, negated):
         return len(value) < 500
@@ -390,7 +391,7 @@ class IExactIndexer(StringIndexerMixin, Indexer):
 
 
 class HourIndexer(TimeIndexerMixin, Indexer):
-    OPERATOR = 'hour'
+    OPERATOR = "hour"
 
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, datetime.datetime)
@@ -413,7 +414,7 @@ class HourIndexer(TimeIndexerMixin, Indexer):
 
 
 class MinuteIndexer(TimeIndexerMixin, Indexer):
-    OPERATOR = 'minute'
+    OPERATOR = "minute"
 
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, datetime.datetime)
@@ -436,7 +437,8 @@ class MinuteIndexer(TimeIndexerMixin, Indexer):
 
 
 class SecondIndexer(TimeIndexerMixin, Indexer):
-    OPERATOR = 'second'
+    OPERATOR = "second"
+
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, datetime.datetime)
 
@@ -458,7 +460,7 @@ class SecondIndexer(TimeIndexerMixin, Indexer):
 
 
 class DayIndexer(DateIndexerMixin, Indexer):
-    OPERATOR = 'day'
+    OPERATOR = "day"
 
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, (datetime.datetime, datetime.date))
@@ -481,7 +483,7 @@ class DayIndexer(DateIndexerMixin, Indexer):
 
 
 class YearIndexer(DateIndexerMixin, Indexer):
-    OPERATOR = 'year'
+    OPERATOR = "year"
 
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, (datetime.datetime, datetime.date))
@@ -505,7 +507,7 @@ class YearIndexer(DateIndexerMixin, Indexer):
 
 
 class MonthIndexer(DateIndexerMixin, Indexer):
-    OPERATOR = 'month'
+    OPERATOR = "month"
 
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, (datetime.datetime, datetime.date))
@@ -529,7 +531,7 @@ class MonthIndexer(DateIndexerMixin, Indexer):
 
 
 class WeekDayIndexer(DateIndexerMixin, Indexer):
-    OPERATOR = 'week_day'
+    OPERATOR = "week_day"
 
     def validate_can_be_indexed(self, value, negated):
         return isinstance(value, (datetime.datetime, datetime.date))
@@ -553,7 +555,7 @@ class WeekDayIndexer(DateIndexerMixin, Indexer):
 
 class ContainsIndexer(StringIndexerMixin, Indexer):
     PREP_VALUE_RETURNS_ENTITIES = True
-    OPERATOR = u'contains'
+    OPERATOR = u"contains"
     INDEXED_COLUMN_NAME = OPERATOR
 
     def validate_can_be_indexed(self, value, negated):
@@ -580,12 +582,8 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
         # Delete all the entities matching the ancestor query
         Delete([x for x in qry.Run() if x.name() == cls.OPERATOR])
 
-
     def _generate_kind_name(self, model, column):
-        return "_djangae_idx_{}_{}".format(
-            get_top_concrete_parent(model)._meta.db_table,
-            column
-        )
+        return "_djangae_idx_{}_{}".format(get_top_concrete_parent(model)._meta.db_table, column)
 
     def _generate_permutations(self, value):
         return [value[i:] for i in range(len(value))]
@@ -606,14 +604,12 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
         if not value:
             raise IgnoreForIndexing([])
 
-        value = list(set(value)) # De-duplicate
+        value = list(set(value))  # De-duplicate
 
         namespace = connection.settings_dict.get("NAMESPACE", "")
 
         key = transaction._rpc(using=connection.alias).key(
-            self._generate_kind_name(model, column),
-            self.OPERATOR,
-            namespace=namespace
+            self._generate_kind_name(model, column), self.OPERATOR, namespace=namespace
         )
         entity = Entity(key)
         entity[self.INDEXED_COLUMN_NAME] = value
@@ -646,13 +642,12 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
         namespace = connection.settings_dict.get("NAMESPACE", "")
 
         qry = transaction._rpc(using=connection.alias).query(
-            kind=self._generate_kind_name(model, column),
-            namespace=namespace
+            kind=self._generate_kind_name(model, column), namespace=namespace
         )
         qry.keys_only()
 
-        qry.add_filter(self.INDEXED_COLUMN_NAME, '>=', value)
-        qry.add_filter(self.INDEXED_COLUMN_NAME, '<=', value + u'\ufffd')
+        qry.add_filter(self.INDEXED_COLUMN_NAME, ">=", value)
+        qry.add_filter(self.INDEXED_COLUMN_NAME, "<=", value + u"\ufffd")
 
         # We can't filter on the 'name' as part of the query, because the name is the key and these
         # are child entities of the ancestor entities which they are indexing, and as we don't know
@@ -663,7 +658,7 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
 
 
 class IContainsIndexer(ContainsIndexer):
-    OPERATOR = 'icontains'
+    OPERATOR = "icontains"
 
     def _generate_permutations(self, value):
         return super(IContainsIndexer, self)._generate_permutations(value.lower())
@@ -673,10 +668,10 @@ class IContainsIndexer(ContainsIndexer):
 
 
 class LegacyContainsIndexer(StringIndexerMixin, Indexer):
-    OPERATOR = 'contains'
+    OPERATOR = "contains"
 
     def number_of_permutations(self, value):
-        return sum(range(len(value)+1))
+        return sum(range(len(value) + 1))
 
     def validate_can_be_indexed(self, value, negated):
         if negated:
@@ -690,7 +685,7 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
             if hasattr(value, "isoformat"):
                 value = value.isoformat()
 
-            if self.number_of_permutations(value) > MAX_COLUMNS_PER_SPECIAL_INDEX*500:
+            if self.number_of_permutations(value) > MAX_COLUMNS_PER_SPECIAL_INDEX * 500:
                 raise ValueError(
                     "Can't index for contains query, this value is too long and has too many "
                     "permutations. You can increase the DJANGAE_MAX_COLUMNS_PER_SPECIAL_INDEX "
@@ -698,8 +693,9 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
                 )
             if len(value) > CHARACTERS_PER_COLUMN[-1]:
                 raise ValueError(
-                    "Can't index for contains query, this value can be maximum {0} characters long."
-                    .format(CHARACTERS_PER_COLUMN[-1])
+                    "Can't index for contains query, this value can be maximum {0} characters long.".format(
+                        CHARACTERS_PER_COLUMN[-1]
+                    )
                 )
 
             if _is_iterable(value):
@@ -707,12 +703,12 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
                 # substrings of each string in `value`
                 for element in value:
                     length = len(element)
-                    lists = [element[i:j + 1] for i in range(length) for j in range(i, length)]
+                    lists = [element[i : j + 1] for i in range(length) for j in range(i, length)]
                     results.extend(lists)
             else:
                 # `value` is a string. Generate a list of all its substrings.
                 length = len(value)
-                lists = [value[i:j + 1] for i in range(length) for j in range(i, length)]
+                lists = [value[i : j + 1] for i in range(length) for j in range(i, length)]
                 results.extend(lists)
 
         if not results:
@@ -750,7 +746,7 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
 
 
 class LegacyIContainsIndexer(LegacyContainsIndexer):
-    OPERATOR = 'icontains'
+    OPERATOR = "icontains"
 
     def prep_value_for_database(self, value, index, **kwargs):
         if value is None:
@@ -761,7 +757,7 @@ class LegacyIContainsIndexer(LegacyContainsIndexer):
 
     def indexed_column_name(self, field_column, value, index):
         column_name = super(LegacyIContainsIndexer, self).indexed_column_name(field_column, value, index)
-        return column_name.replace('_idx_contains_', '_idx_icontains_')
+        return column_name.replace("_idx_contains_", "_idx_icontains_")
 
     def prep_value_for_query(self, value, **kwargs):
         return super(LegacyIContainsIndexer, self).prep_value_for_query(value).lower()
@@ -775,7 +771,8 @@ class EndsWithIndexer(StringIndexerMixin, Indexer):
         of the last characters in a list field. Then we can just do an exact lookup on
         the value. Which isn't as nice, but is more flexible.
     """
-    OPERATOR = 'endswith'
+
+    OPERATOR = "endswith"
 
     def validate_can_be_indexed(self, value, negated):
         if negated:
@@ -822,7 +819,8 @@ class IEndsWithIndexer(EndsWithIndexer):
     """
         Same as above, just all lower cased
     """
-    OPERATOR = 'iendswith'
+
+    OPERATOR = "iendswith"
 
     def prep_value_for_database(self, value, index, **kwargs):
         if value:
@@ -841,7 +839,8 @@ class StartsWithIndexer(StringIndexerMixin, Indexer):
         Although we can do a startswith natively, doing it this way allows us to
         use more queries (E.g. we save an exclude)
     """
-    OPERATOR = 'startswith'
+
+    OPERATOR = "startswith"
 
     def validate_can_be_indexed(self, value, negated):
         if negated:
@@ -891,7 +890,8 @@ class IStartsWithIndexer(StartsWithIndexer):
     """
         Same as above, just all lower cased
     """
-    OPERATOR = 'istartswith'
+
+    OPERATOR = "istartswith"
 
     def prep_value_for_database(self, value, index, **kwargs):
         if value:
@@ -906,14 +906,14 @@ class IStartsWithIndexer(StartsWithIndexer):
 
 
 class RegexIndexer(StringIndexerMixin, Indexer):
-    OPERATOR = 'regex'
+    OPERATOR = "regex"
 
     def prepare_index_type(self, index_type, value):
         """
             If we're dealing with RegexIndexer, we create a new index for each
             regex pattern. Indexes are called regex__pattern.
         """
-        return '{}__{}'.format(index_type, value.encode("utf-8").encode('hex'))
+        return "{}__{}".format(index_type, value.encode("utf-8").encode("hex"))
 
     def validate_can_be_indexed(self, value, negated):
         if negated:
@@ -923,9 +923,9 @@ class RegexIndexer(StringIndexerMixin, Indexer):
 
     def get_pattern(self, index):
         try:
-            return index.split('__')[-1].decode('hex').decode("utf-8")
+            return index.split("__")[-1].decode("hex").decode("utf-8")
         except IndexError:
-            return ''
+            return ""
 
     def check_if_match(self, value, index, flags=0):
         pattern = self.get_pattern(index)
@@ -948,28 +948,27 @@ class RegexIndexer(StringIndexerMixin, Indexer):
         return True
 
     def indexed_column_name(self, field_column, value, index):
-        return "_idx_regex_{0}_{1}".format(
-            field_column, self.get_pattern(index).encode("utf-8").encode('hex')
-        )
+        return "_idx_regex_{0}_{1}".format(field_column, self.get_pattern(index).encode("utf-8").encode("hex"))
 
     def prep_query_operator(self, op):
         return "exact"
 
 
 class IRegexIndexer(RegexIndexer):
-    OPERATOR = 'iregex'
+    OPERATOR = "iregex"
 
     def prepare_index_type(self, index_type, value):
-        return '{}__{}'.format(index_type, value.encode('hex'))
+        return "{}__{}".format(index_type, value.encode("hex"))
 
     def prep_value_for_database(self, value, index, **kwargs):
         return self.check_if_match(value, index, flags=re.IGNORECASE)
 
     def indexed_column_name(self, field_column, value, index):
-        return "_idx_iregex_{0}_{1}".format(field_column, self.get_pattern(index).encode('hex'))
+        return "_idx_iregex_{0}_{1}".format(field_column, self.get_pattern(index).encode("hex"))
 
 
 _REGISTERED_INDEXERS = []
+
 
 def register_indexer(indexer_class):
     global _REGISTERED_INDEXERS
@@ -982,6 +981,7 @@ def get_indexer(field, operator):
     for indexer in _REGISTERED_INDEXERS:
         if indexer.handles(field, operator):
             return indexer
+
 
 def indexers_for_model(model_class):
     indexes = special_indexes_for_model(model_class)

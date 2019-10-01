@@ -1,5 +1,3 @@
-
-
 import uuid
 import threading
 
@@ -11,7 +9,7 @@ from google.cloud import exceptions
 TRANSACTION_ENTITY_LIMIT = 500
 
 
-def in_atomic_block(using='default'):
+def in_atomic_block(using="default"):
     connection = connections[using].connection
     return bool(connection.gclient.current_transaction)
 
@@ -51,15 +49,11 @@ class Transaction(object):
             return self._connection.gclient.get(key_or_keys)
 
     def put(self, entity):
-        putter = (
-            self._datastore_transaction.put
-            if self._datastore_transaction
-            else self._connection.gclient.put
-        )
+        putter = self._datastore_transaction.put if self._datastore_transaction else self._connection.gclient.put
 
         putter(entity)
 
-        assert(entity.key)
+        assert entity.key
         return entity.key
 
     def delete(self, key_or_keys):
@@ -68,7 +62,7 @@ class Transaction(object):
         are currently in a transaction batch or not.
         """
         # if we've got an iterable of keys....
-        if hasattr(key_or_keys, '__iter__'):
+        if hasattr(key_or_keys, "__iter__"):
             # there is no delete_multi on the transaction object directly
             if self._datastore_transaction:
                 for key in key_or_keys:
@@ -210,13 +204,10 @@ def _rpc(using):
         def _exit(self):
             pass
 
-    return (
-        current_transaction(using) or
-        RootTransaction(connections[using].connection)
-    )
+    return current_transaction(using) or RootTransaction(connections[using].connection)
 
 
-def current_transaction(using='default'):
+def current_transaction(using="default"):
     """
         Returns the current 'Transaction' object (which may be a NoTransaction). This is useful
         when atomic() is used as a decorator rather than a context manager. e.g.
@@ -266,13 +257,8 @@ class AtomicDecorator(context_decorator.ContextDecorator):
     the Datastore client under the hood. This is useful to workaround the
     limitations of 500 entity writes per transaction/batch.
     """
-    VALID_ARGUMENTS = (
-        "independent",
-        "mandatory",
-        "using",
-        "read_only",
-        "enable_cache",
-    )
+
+    VALID_ARGUMENTS = ("independent", "mandatory", "using", "read_only", "enable_cache")
 
     @classmethod
     def _do_enter(cls, state, decorator_args):

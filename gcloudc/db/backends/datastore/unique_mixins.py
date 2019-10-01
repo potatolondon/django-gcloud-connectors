@@ -14,6 +14,7 @@ class UniquenessMixin(object):
 
     This must be used if you have a list or set field marked as unique.
     """
+
     def _perform_unique_checks(self, unique_checks):
         errors = {}
         for model_class, unique_check in unique_checks:

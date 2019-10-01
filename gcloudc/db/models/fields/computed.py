@@ -34,7 +34,7 @@ class ZipLoaderMixin(object):
         super(ZipLoaderMixin, self).__init__(filename=text_filename)
 
     def load(self, filename):
-        from pyuca.collator import COLL_ELEMENT_PATTERN, hexstrings2int # pyuca is required for ComputedCollationField
+        from pyuca.collator import COLL_ELEMENT_PATTERN, hexstrings2int  # pyuca is required for ComputedCollationField
 
         with zipfile.ZipFile(self.zip_filename) as z:
             with z.open(filename) as f:
@@ -124,11 +124,12 @@ class ComputedCollationField(ComputedFieldMixin, CharField):
     collator = None
 
     def __init__(self, source_field_name):
-        import pyuca # Required dependency for ComputedCollationField
+        import pyuca  # Required dependency for ComputedCollationField
         from pyuca.collator import Collator_5_2_0
 
         # Instantiate Collator once only to save on memory / processing
         if not ComputedCollationField.collator:
+
             class Collator(ZipLoaderMixin, Collator_5_2_0):
                 pass
 
@@ -148,9 +149,7 @@ class ComputedCollationField(ComputedFieldMixin, CharField):
             sort_key = u"".join([chr(x) for x in sort_key])
             truncated_key = truncate(sort_key)
             if truncated_key != sort_key:
-                logger.warn(
-                    "Truncated sort key for '%s.%s'", instance._meta.db_table, source_field_name
-                )
+                logger.warn("Truncated sort key for '%s.%s'", instance._meta.db_table, source_field_name)
             return truncated_key
 
         super(ComputedCollationField, self).__init__(computer)
@@ -159,4 +158,3 @@ class ComputedCollationField(ComputedFieldMixin, CharField):
         name, path, args, kwargs = super(ComputedCollationField, self).deconstruct()
         del kwargs["max_length"]
         return name, path, args, kwargs
-

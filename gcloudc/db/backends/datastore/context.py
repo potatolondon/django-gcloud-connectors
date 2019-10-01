@@ -150,7 +150,7 @@ class CacheDict(object):
         self.total_value_size -= sys.getsizeof(v)
 
     def __delitem__(self, k):
-        assert(set([id(x) for x in self._entries.values()]) == set(self.value_priority))
+        assert set([id(x) for x in self._entries.values()]) == set(self.value_priority)
         v = self._entries[k]
         priority_key = id(v)
 
@@ -162,7 +162,7 @@ class CacheDict(object):
 
         del self._entries[k]
 
-        assert(set([id(x) for x in self._entries.values()]) == set(self.value_priority))
+        assert set([id(x) for x in self._entries.values()]) == set(self.value_priority)
 
     def __repr__(self):
         return "{%s}" % ", ".join([":".join([repr(k), repr(v)]) for k, v in self.items()])
@@ -240,6 +240,7 @@ class ContextCache(object):
     """ Object via which the stack of Context objects and the settings for the context caching are
         accessed. A separate instance of this should exist per thread.
     """
+
     def __init__(self):
         self.memcache_enabled = True
         self.context_enabled = True
@@ -248,8 +249,7 @@ class ContextCache(object):
     def reset(self, keep_disabled_flags=False):
         if rpc.IsInTransaction():
             raise RuntimeError(
-                "Clearing the context cache inside a transaction breaks everything, "
-                "we can't let you do that"
+                "Clearing the context cache inside a transaction breaks everything, " "we can't let you do that"
             )
         self.stack = ContextStack()
         if not keep_disabled_flags:
@@ -258,7 +258,6 @@ class ContextCache(object):
 
 
 class Context(object):
-
     def __init__(self, stack):
         self.cache = CacheDict()
         self._stack = stack
@@ -280,8 +279,7 @@ class Context(object):
         if not isinstance(entity_or_key, rpc.Key):
             entity_or_key = entity_or_key.key()
 
-        for identifier in self.cache.get_reversed(
-                entity_or_key, compare_func=key_or_entity_compare):
+        for identifier in self.cache.get_reversed(entity_or_key, compare_func=key_or_entity_compare):
             del self.cache[identifier]
 
     def get_entity(self, identifier):
@@ -306,9 +304,7 @@ class ContextStack(object):
         self.staged = []
 
     def push(self):
-        self.stack.append(
-            Context(self)  # Empty context
-        )
+        self.stack.append(Context(self))  # Empty context
 
     def pop(self, apply_staged=False, clear_staged=False, discard=False):
         """
@@ -339,9 +335,7 @@ class ContextStack(object):
                     # which is almost definitely
                     # going to be the case, but it feels a bit dirty
                     namespace = keys[0].namespace() or None
-                    caching.remove_entities_from_cache_by_key(
-                        keys, namespace=namespace, memcache_only=True
-                    )
+                    caching.remove_entities_from_cache_by_key(keys, namespace=namespace, memcache_only=True)
 
                 self.top.apply(to_apply)
 

@@ -5,14 +5,8 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 from . import utils
-from .context import (
-    ContextCache,
-    key_or_entity_compare,
-)
-from .unique_utils import (
-    _format_value_for_identifier,
-    unique_identifiers_from_entity,
-)
+from .context import ContextCache, key_or_entity_compare
+from .unique_utils import _format_value_for_identifier, unique_identifiers_from_entity
 
 _local = threading.local()
 
@@ -48,6 +42,7 @@ def _apply_namespace(value_or_map, namespace):
 
 def _strip_namespace(value_or_map):
     """ Remove the namespace part from the given cache key(s). """
+
     def _strip(value):
         return value.split(":", 1)[-1]
 
@@ -77,7 +72,9 @@ def _get_cache_key_and_model_from_datastore_key(key):
         else:
             # This should never happen.. if it does then we can edit get_model_from_db_table to pass
             # include_deferred=True/included_swapped=True to get_models, whichever makes it better
-            raise ImproperlyConfigured("Unable to locate model for db_table '{}' - are you missing an INSTALLED_APP?".format(key.kind()))
+            raise ImproperlyConfigured(
+                "Unable to locate model for db_table '{}' - are you missing an INSTALLED_APP?".format(key.kind())
+            )
 
     # We build the cache key for the ID of the instance
     cache_key = "|".join(
@@ -103,14 +100,10 @@ def add_entities_to_cache(model, entities, situation, namespace, skip_memcache=F
     if situation == CachingSituation.DATASTORE_GET and datastore.IsInTransaction():
         return
 
-    identifiers = [
-        unique_identifiers_from_entity(model, entity) for entity in entities
-    ]
+    identifiers = [unique_identifiers_from_entity(model, entity) for entity in entities]
 
     for ent_identifiers, entity in zip(identifiers, entities):
-        get_context().stack.top.cache_entity(
-            _apply_namespace(ent_identifiers, namespace), entity, situation
-        )
+        get_context().stack.top.cache_entity(_apply_namespace(ent_identifiers, namespace), entity, situation)
 
 
 def remove_entities_from_cache_by_key(keys, namespace):
@@ -124,9 +117,7 @@ def remove_entities_from_cache_by_key(keys, namespace):
     context = get_context()
 
     for key in keys:
-        identifiers = context.stack.top.cache.get_reversed(
-            key, compare_func=key_or_entity_compare
-        )
+        identifiers = context.stack.top.cache.get_reversed(key, compare_func=key_or_entity_compare)
 
         for identifier in identifiers:
             if identifier in context.stack.top.cache:

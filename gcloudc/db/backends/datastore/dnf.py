@@ -126,7 +126,7 @@ def normalize_query(query):
 
         rewalk = False
         for child in where.children:
-            if where.connector == "AND" and child.children and child.connector == 'AND' and not child.negated:
+            if where.connector == "AND" and child.children and child.connector == "AND" and not child.negated:
                 where.children.remove(child)
                 where.children.extend(child.children)
                 rewalk = True
@@ -135,7 +135,7 @@ def normalize_query(query):
                 where.children.remove(child)
                 where.children.extend(child.children)
                 rewalk = True
-            elif len(child.children) > 1 and child.connector == 'AND' and child.negated:
+            elif len(child.children) > 1 and child.connector == "AND" and child.negated:
                 new_grandchildren = []
                 for grandchild in child.children:
                     new_node = WhereNode(child.using)
@@ -143,7 +143,7 @@ def normalize_query(query):
                     new_node.children = [grandchild]
                     new_grandchildren.append(new_node)
                 child.children = new_grandchildren
-                child.connector = 'OR'
+                child.connector = "OR"
                 rewalk = True
             else:
                 walk_tree(child, negated)
@@ -151,13 +151,13 @@ def normalize_query(query):
         if rewalk:
             walk_tree(where, original_negated)
 
-        if where.connector == 'AND' and any([x.connector == 'OR' for x in where.children]):
+        if where.connector == "AND" and any([x.connector == "OR" for x in where.children]):
             # ANDs should have been taken care of!
-            assert not any([x.connector == 'AND' and not x.is_leaf for x in where.children ])
+            assert not any([x.connector == "AND" and not x.is_leaf for x in where.children])
 
             product_list = []
             for child in where.children:
-                if child.connector == 'OR':
+                if child.connector == "OR":
                     product_list.append(child.children)
                 else:
                     product_list.append([child])
@@ -167,18 +167,18 @@ def normalize_query(query):
             new_children = []
             for branch in producted:
                 new_and = WhereNode(where.using)
-                new_and.connector = 'AND'
+                new_and.connector = "AND"
                 new_and.children = list(copy.deepcopy(branch))
                 new_children.append(new_and)
 
-            where.connector = 'OR'
+            where.connector = "OR"
             where.children = list(set(new_children))
             walk_tree(where, original_negated)
 
-        elif where.connector == 'OR':
+        elif where.connector == "OR":
             new_children = []
             for child in where.children:
-                if child.connector == 'OR':
+                if child.connector == "OR":
                     new_children.extend(child.children)
                 else:
                     new_children.append(child)
@@ -186,9 +186,9 @@ def normalize_query(query):
 
     walk_tree(where)
 
-    if where.connector != 'OR':
+    if where.connector != "OR":
         new_node = WhereNode(where.using)
-        new_node.connector = 'OR'
+        new_node.connector = "OR"
         new_node.children = [where]
         query._where = new_node
 
@@ -206,10 +206,7 @@ def normalize_query(query):
             all_pks = False
             break
 
-    MAX_ALLOWABLE_QUERIES = getattr(
-        settings,
-        "DJANGAE_MAX_QUERY_BRANCHES", DEFAULT_MAX_ALLOWABLE_QUERIES
-    )
+    MAX_ALLOWABLE_QUERIES = getattr(settings, "DJANGAE_MAX_QUERY_BRANCHES", DEFAULT_MAX_ALLOWABLE_QUERIES)
 
     if (not all_pks) and len(query.where.children) > MAX_ALLOWABLE_QUERIES:
         raise NotSupportedError(
@@ -235,7 +232,7 @@ def normalize_query(query):
         #    if that was the last branch, then the queryset will be empty
 
         # Everything got wiped out!
-        if node.connector == 'OR' and len(node.children) == 0:
+        if node.connector == "OR" and len(node.children) == 0:
             raise EmptyResultSet()
 
         for and_branch in node.children[:]:

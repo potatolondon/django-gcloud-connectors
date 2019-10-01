@@ -8,7 +8,7 @@ class ModelWithComputedCollationField(models.Model):
     """Test model for `ComputedCollationField`."""
 
     name = models.CharField(max_length=100)
-    name_order = ComputedCollationField('name')
+    name_order = ComputedCollationField("name")
 
     class Meta:  # noqa
         app_label = "gcloudc"
@@ -19,5 +19,4 @@ class ComputedCollationFieldTests(TestCase):
 
     def test_model(self):
         """Tests for a model using a `ComputedCollationField`."""
-        ModelWithComputedCollationField.objects.create(name='demo1')
-
+        ModelWithComputedCollationField.objects.create(name="demo1")

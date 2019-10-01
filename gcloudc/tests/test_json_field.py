@@ -18,7 +18,6 @@ class JSONFieldWithDefaultModel(models.Model):
 
 
 class JSONFieldModelTests(TestCase):
-
     def test_invalid_data_in_datastore_doesnt_throw_an_error(self):
         """
             If invalid data is found while reading the entity data, then
@@ -30,8 +29,7 @@ class JSONFieldModelTests(TestCase):
             non-nullable. The field value will still be None when read.
         """
         entity = Entity(
-            JSONFieldModel._meta.db_table, id=1,
-            namespace=settings.DATABASES["default"].get("NAMESPACE", "")
+            JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"].get("NAMESPACE", "")
         )
         entity["json_field"] = "bananas"
         entity.put()
@@ -40,7 +38,7 @@ class JSONFieldModelTests(TestCase):
         self.assertEqual(instance.json_field, "bananas")
 
     def test_object_pairs_hook_with_ordereddict(self):
-        items = [('first', 1), ('second', 2), ('third', 3), ('fourth', 4)]
+        items = [("first", 1), ("second", 2), ("third", 3), ("fourth", 4)]
         od = OrderedDict(items)
 
         thing = JSONFieldModel(json_field=od)
@@ -56,10 +54,10 @@ class JSONFieldModelTests(TestCase):
         """
 
         # monkey patch field
-        field = JSONFieldModel._meta.get_field('json_field')
+        field = JSONFieldModel._meta.get_field("json_field")
         field.use_ordered_dict = False
 
-        normal_dict = {'a': 1, 'b': 2, 'c': 3}
+        normal_dict = {"a": 1, "b": 2, "c": 3}
 
         thing = JSONFieldModel(json_field=normal_dict)
         self.assertFalse(isinstance(thing.json_field, OrderedDict))
@@ -74,14 +72,14 @@ class JSONFieldModelTests(TestCase):
         """ Tests that float values in JSONFields are correctly serialized over repeated saves.
             Regression test for 46e685d4, which fixes floats being returned as strings after a second save.
         """
-        test_instance = JSONFieldModel(json_field={'test': 0.1})
+        test_instance = JSONFieldModel(json_field={"test": 0.1})
         test_instance.save()
 
         test_instance = JSONFieldModel.objects.get()
         test_instance.save()
 
         test_instance = JSONFieldModel.objects.get()
-        self.assertEqual(test_instance.json_field['test'], 0.1)
+        self.assertEqual(test_instance.json_field["test"], 0.1)
 
     def test_defaults_are_handled_as_pythonic_data_structures(self):
         """ Tests that default values are handled as python data structures and

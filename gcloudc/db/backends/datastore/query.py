@@ -4,69 +4,39 @@ import logging
 import re
 from itertools import chain
 
-from django.db import (
-    NotSupportedError,
-    connections,
-)
+from django.db import NotSupportedError, connections
 from django.db.models import AutoField
 from django.db.models.sql.datastructures import EmptyResultSet
 from django.utils import six
 
-from . import (
-    POLYMODEL_CLASS_ATTRIBUTE,
-)
-from .indexing import (
-    add_special_index,
-    get_indexer,
-)
-from .utils import (
-    ensure_datetime,
-    get_field_from_column,
-    get_top_concrete_parent,
-    has_concrete_parents,
-)
+from . import POLYMODEL_CLASS_ATTRIBUTE
+from .indexing import add_special_index, get_indexer
+from .utils import ensure_datetime, get_field_from_column, get_top_concrete_parent, has_concrete_parents
 
 logger = logging.getLogger(__name__)
 
 
-VALID_QUERY_KINDS = (
-    "SELECT",
-    "UPDATE",
-    "INSERT",
-    "DELETE",
-    "COUNT",
-    "AVERAGE"
-)
+VALID_QUERY_KINDS = ("SELECT", "UPDATE", "INSERT", "DELETE", "COUNT", "AVERAGE")
 
-VALID_ANNOTATIONS = {
-    "MIN": min,
-    "MAX": max,
-    "SUM": sum,
-    "COUNT": len,
-    "AVG": lambda x: (sum(x) / len(x))
-}
+VALID_ANNOTATIONS = {"MIN": min, "MAX": max, "SUM": sum, "COUNT": len, "AVG": lambda x: (sum(x) / len(x))}
 
-VALID_CONNECTORS = (
-    'AND', 'OR'
-)
+VALID_CONNECTORS = ("AND", "OR")
 
 
-VALID_OPERATORS = (
-    '=', '<', '>', '<=', '>=', 'IN'
-)
+VALID_OPERATORS = ("=", "<", ">", "<=", ">=", "IN")
 
 
 def convert_operator(operator):
-    if operator == 'exact':
-        return '='
-    elif operator == 'gt':
-        return '>'
-    elif operator == 'lt':
-        return '<'
-    elif operator == 'gte':
-        return '>='
-    elif operator == 'lte':
-        return '<='
+    if operator == "exact":
+        return "="
+    elif operator == "gt":
+        return ">"
+    elif operator == "lt":
+        return "<"
+    elif operator == "gte":
+        return ">="
+    elif operator == "lte":
+        return "<="
 
     return operator.upper()
 
@@ -83,7 +53,7 @@ class WhereNode(object):
         self.lookup_name = None
 
         self.children = []
-        self.connector = 'AND'
+        self.connector = "AND"
         self.negated = False
 
     @property
@@ -96,9 +66,7 @@ class WhereNode(object):
     def append_child(self, node):
         self.children.append(node)
 
-    def set_leaf(
-            self, column, operator, value, is_pk_field, negated, lookup_name, namespace,
-            target_field=None):
+    def set_leaf(self, column, operator, value, is_pk_field, negated, lookup_name, namespace, target_field=None):
 
         # We need access to the Datastore client to access the Key factory
         gclient = connections[self.using].connection.gclient
@@ -124,15 +92,11 @@ class WhereNode(object):
             table = model._meta.db_table
 
             if isinstance(value, (list, tuple)):
-                value = [
-                    gclient.key(table, x, namespace=namespace)
-                    for x in value if x
-                ]
+                value = [gclient.key(table, x, namespace=namespace) for x in value if x]
             else:
                 # Django 1.11 has operators as symbols, earlier versions use "exact" etc.
-                if (
-                    (operator == "isnull" and value is True) or
-                    (operator in ("exact", "lt", "lte", "<", "<=", "=") and not value)
+                if (operator == "isnull" and value is True) or (
+                    operator in ("exact", "lt", "lte", "<", "<=", "=") and not value
                 ):
                     # id=None will never return anything and
                     # Empty strings and 0 are forbidden as keys
@@ -163,10 +127,7 @@ class WhereNode(object):
             add_special_index(connections[self.using], target_field.model, column, special_indexer, operator, value)
             index_type = special_indexer.prepare_index_type(operator, value)
             value = special_indexer.prep_value_for_query(
-                value,
-                model=target_field.model,
-                column=column,
-                connection=connections[self.using]
+                value, model=target_field.model, column=column, connection=connections[self.using]
             )
             column = special_indexer.indexed_column_name(column, value, index_type)
             operator = special_indexer.prep_query_operator(operator)
@@ -186,9 +147,9 @@ class WhereNode(object):
             return "[%s%s%s]" % (self.column, self.operator, self.value)
         else:
             return "(%s:%s%s)" % (
-                self.connector, "!" if self.negated else "", ",".join([
-                    repr(x) for x in self.children
-                ])
+                self.connector,
+                "!" if self.negated else "",
+                ",".join([repr(x) for x in self.children]),
             )
 
     def __eq__(self, rhs):
@@ -249,17 +210,17 @@ class Query(object):
 
         # If we have children, and they are all leaf nodes then this is a normalized
         # query
-        return self.where.connector == 'OR' and self.where.children and all(x.is_leaf for x in self.where.children)
+        return self.where.connector == "OR" and self.where.children and all(x.is_leaf for x in self.where.children)
 
     def add_extra_select(self, column, lookup):
         if lookup.lower().startswith("select "):
             raise ValueError("SQL statements aren't supported with extra(select=)")
 
         # Boolean expression test
-        bool_expr = "(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[=|>|<]{1,2})\s?(?P<rhs>[\w+|\']+)"
+        bool_expr = "(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[=|>|<]{1,2})\s?(?P<rhs>[\w+|']+)"
 
         # Operator expression test
-        op_expr = "(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[+|-|/|*])\s?(?P<rhs>[\w+|\']+)"
+        op_expr = "(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[+|-|/|*])\s?(?P<rhs>[\w+|']+)"
 
         OP_LOOKUP = {
             "=": lambda x, y: x == y,
@@ -271,15 +232,15 @@ class Query(object):
             "+": lambda x, y: x + y,
             "-": lambda x, y: x - y,
             "/": lambda x, y: x / y,
-            "*": lambda x, y: x * y
+            "*": lambda x, y: x * y,
         }
 
         for regex in (bool_expr, op_expr):
             match = re.match(regex, lookup)
             if match:
-                lhs = match.group('lhs')
-                rhs = match.group('rhs')
-                op = match.group('op').lower()
+                lhs = match.group("lhs")
+                rhs = match.group("rhs")
+                op = match.group("op").lower()
                 if op in OP_LOOKUP:
                     self.extra_selects.append((column, (OP_LOOKUP[op], (lhs, rhs))))
                 else:
@@ -341,19 +302,13 @@ class Query(object):
             # Trunc stores the source column and the lookup type differently to Date
             # which is why we have the getattr craziness here
             lookup_column = (
-                annotation.lhs.output_field.column
-                if name == "Trunc" else getattr(annotation, "lookup", column)
+                annotation.lhs.output_field.column if name == "Trunc" else getattr(annotation, "lookup", column)
             )
 
             lookup_type = getattr(annotation, "lookup_type", getattr(annotation, "kind", None))
             assert lookup_type
 
-            self.extra_selects.append(
-                (column,
-                (lambda x: process_date(x, lookup_type), [
-                    lookup_column
-                ]))
-            )
+            self.extra_selects.append((column, (lambda x: process_date(x, lookup_type), [lookup_column])))
             # Override the projection so that we only get this column
             self.columns = set([lookup_column])
 
@@ -369,9 +324,7 @@ class Query(object):
 
         if field is None:
             raise NotSupportedError(
-                "{} is not a valid column for the queried model. Did you try to join?".format(
-                    column
-                )
+                "{} is not a valid column for the queried model. Did you try to join?".format(column)
             )
 
         if field.db_type(self.connection) in ("bytes", "text", "list", "set"):
@@ -505,7 +458,7 @@ class Query(object):
 
                 for child in node.children[:]:
                     if negated:
-                        if child.lookup_name != 'isnull':
+                        if child.lookup_name != "isnull":
                             equality_fields.add(child.column)
                             if child.column in negated_isnull_fields:
                                 node.children.remove(isnull_lookup[child.column])
@@ -517,6 +470,7 @@ class Query(object):
                                 isnull_lookup[child.column] = child
 
                     walk(child, negated)
+
         if self.where:
             walk(self._where, False)
 
@@ -537,7 +491,7 @@ class Query(object):
                 walk(child, negated)
 
                 if child.will_never_return_results:
-                    if node.connector == 'AND':
+                    if node.connector == "AND":
                         if child.negated:
                             node.children.remove(child)
                         else:
@@ -572,7 +526,7 @@ class Query(object):
             if len(inequality_fields) > 1:
                 raise NotSupportedError(
                     "You can only have one inequality filter per query on the rpc. "
-                    "Filters were: %s" % ' '.join(inequality_fields)
+                    "Filters were: %s" % " ".join(inequality_fields)
                 )
 
         if self.where:
@@ -614,16 +568,16 @@ class Query(object):
 
             new_filter = WhereNode(self.connection.alias)
             new_filter.column = POLYMODEL_CLASS_ATTRIBUTE
-            new_filter.operator = '='
+            new_filter.operator = "="
             new_filter.value = self.model._meta.db_table
 
             # We add this bare AND just to stay consistent with what Django does
             new_and = WhereNode(self.connection.alias)
-            new_and.connector = 'AND'
+            new_and.connector = "AND"
             new_and.children = [new_filter]
 
             new_root = WhereNode(self.connection.alias)
-            new_root.connector = 'AND'
+            new_root.connector = "AND"
             new_root.children = [new_and]
             if self._where:
                 # Add the original where if there was one
@@ -659,18 +613,18 @@ class Query(object):
         where = []
 
         if self.where:
-            assert self.where.connector == 'OR'
+            assert self.where.connector == "OR"
             for node in self.where.children:
-                assert node.connector == 'AND'
+                assert node.connector == "AND"
 
                 query = {}
 
                 if node.children:
                     for lookup in node.children:
 
-                        query[''.join([lookup.column, lookup.operator])] = _serialize_sql_value(lookup.value)
+                        query["".join([lookup.column, lookup.operator])] = _serialize_sql_value(lookup.value)
                 else:
-                    query[''.join([node.column, node.operator])] = _serialize_sql_value(node.value)
+                    query["".join([node.column, node.operator])] = _serialize_sql_value(node.value)
 
                 where.append(query)
 
@@ -696,6 +650,7 @@ def _serialize_sql_value(value):
 
 def _get_parser(query, connection=None):
     from gcloudc.db.backends.datastore.parsers import base
+
     return base.BaseParser(query, connection)
 
 

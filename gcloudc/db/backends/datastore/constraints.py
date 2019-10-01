@@ -13,21 +13,18 @@ This allows us to efficiently check for existing constraints before doing a put(
 import datetime
 
 from . import transaction
-from .dbapi import (
-    DataError,
-    IntegrityError,
-)
+from .dbapi import DataError, IntegrityError
 from .unique_utils import (
     unique_identifiers_from_entity,
     _has_enabled_constraints,
     _has_unique_constraints,
     _get_kind_from_named_marker_key,
-    _get_unique_fields_from_named_marker_key
+    _get_unique_fields_from_named_marker_key,
 )
 from .utils import key_exists
 
 
-UNIQUE_MARKER_KIND = 'uniquemarker'
+UNIQUE_MARKER_KIND = "uniquemarker"
 CONSTRAINT_VIOLATION_MSG = "Unique constraint violation for kind {} on fields: {}"
 
 
@@ -64,8 +61,8 @@ def acquire_unique_markers(model, entity, connection):
         Update a unique marker entity with some new properties and persist
         the update/insertion into the datastore.
         """
-        unique_marker_entity['updated_at'] = datetime.datetime.utcnow()
-        unique_marker_entity['instance'] = entity.key
+        unique_marker_entity["updated_at"] = datetime.datetime.utcnow()
+        unique_marker_entity["instance"] = entity.key
         # any put() is essentially async inside a transaction/batch operation
         transaction._rpc(connection).put(unique_marker_entity)
 
@@ -75,17 +72,13 @@ def acquire_unique_markers(model, entity, connection):
     acquired_markers = []
 
     # get all the key objects we need to represent the entities we put
-    unique_marker_keys = _get_unique_marker_keys_for_entity(
-        model, entity, connection, refetch=False
-    )
+    unique_marker_keys = _get_unique_marker_keys_for_entity(model, entity, connection, refetch=False)
 
     # we can now pass these to the client to fetch the existing unique markers
     # (note that the raw datastore API get has an odd signature, where you
     # need to pass a list kwarg to explicity identify which ones are missing)
     missing_markers = []
-    existing_unique_markers = transaction._rpc(connection).get(
-        unique_marker_keys, missing=missing_markers
-    )
+    existing_unique_markers = transaction._rpc(connection).get(unique_marker_keys, missing=missing_markers)
 
     # handle the markers we know don't exist yet - these can be a straight put()
     for missing_entity in missing_markers:
@@ -97,26 +90,22 @@ def acquire_unique_markers(model, entity, connection):
 
         # if there is a stale unique marker but it doesn't have an instance
         # associated with it, we can grab it and reference our entity
-        if existing_marker['instance'] is None:
+        if existing_marker["instance"] is None:
             put_unique_marker = True
 
         # if any of unique markers exist but reference a different underlying
         # entity (which isn't stale / deleted now), we need to raise an error
         # as the unique constraint is already satisfied
-        elif existing_marker['instance'] != entity.key:
+        elif existing_marker["instance"] != entity.key:
 
             # double check the instance isn't stale / deleted now
-            if key_exists(connection, existing_marker['instance']):
+            if key_exists(connection, existing_marker["instance"]):
 
                 # we can reverse parse the named key to find the fields
                 # which have failed the unique constraint check
                 table_name = _get_kind_from_named_marker_key(existing_marker.key)
                 unique_fields = _get_unique_fields_from_named_marker_key(existing_marker.key)
-                raise IntegrityError(
-                    CONSTRAINT_VIOLATION_MSG.format(
-                        table_name, ", ".join(unique_fields)
-                    )
-                )
+                raise IntegrityError(CONSTRAINT_VIOLATION_MSG.format(table_name, ", ".join(unique_fields)))
 
             # if the referened entity doesn't exist, we can claim the marker
             else:
@@ -153,9 +142,7 @@ def delete_unique_markers_for_entity(model, entity, connection, refetch=True):
     Rather than do a query to find all references, we can grab all the
     UniqueMarker entities by key for a small performance win.
     """
-    unique_marker_keys = _get_unique_marker_keys_for_entity(
-        model, entity, connection, refetch=refetch
-    )
+    unique_marker_keys = _get_unique_marker_keys_for_entity(model, entity, connection, refetch=refetch)
     transaction._rpc(connection).delete(unique_marker_keys)
 
 
@@ -173,13 +160,12 @@ def _get_unique_marker_keys_for_entity(model, entity, connection, refetch=True):
         entity = transaction._rpc(connection).get(entity.key)
         if entity is None:
             # TODO what would be the best exception to raise if the entity is gone
-            raise DataError('Entity no longer exists')
+            raise DataError("Entity no longer exists")
 
     marker_key_values = unique_identifiers_from_entity(model, entity)
     return [
-        connection.connection.gclient.key(
-            UNIQUE_MARKER_KIND, identifier, namespace=connection.namespace
-        ) for identifier in marker_key_values
+        connection.connection.gclient.key(UNIQUE_MARKER_KIND, identifier, namespace=connection.namespace)
+        for identifier in marker_key_values
     ]
 
 
@@ -193,15 +179,11 @@ def check_unique_markers_in_memory(model, entities):
     """
     all_unique_marker_key_values = set([])
     for entity, _ in entities:
-        unique_marker_key_values = unique_identifiers_from_entity(
-            model, entity, ignore_pk=True
-        )
+        unique_marker_key_values = unique_identifiers_from_entity(model, entity, ignore_pk=True)
         for named_key in unique_marker_key_values:
             if named_key not in all_unique_marker_key_values:
                 all_unique_marker_key_values.add(named_key)
             else:
                 table_name = named_key.split("|")[0]
                 unique_fields = named_key.split("|")[1:]
-                raise IntegrityError(
-                    CONSTRAINT_VIOLATION_MSG.format(table_name, unique_fields)
-                )
+                raise IntegrityError(CONSTRAINT_VIOLATION_MSG.format(table_name, unique_fields))

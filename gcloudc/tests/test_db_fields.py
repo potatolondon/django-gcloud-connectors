@@ -1,18 +1,10 @@
-
-
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.core.validators import EmailValidator
-from django.db import (
-    connection,
-    models,
-)
+from django.db import connection, models
 from django.test import override_settings
-from gcloudc.db.models.fields.charfields import (
-    CharField,
-    CharOrNoneField,
-)
+from gcloudc.db.models.fields.charfields import CharField, CharOrNoneField
 from gcloudc.db.models.fields.computed import ComputedCharField, ComputedBooleanField
 from google.cloud import datastore
 
@@ -24,66 +16,49 @@ class BinaryFieldModel(models.Model):
 
 
 class ModelWithCharField(models.Model):
-    char_field_with_max = CharField(
-        max_length=10, default='', blank=True
-    )
+    char_field_with_max = CharField(max_length=10, default="", blank=True)
 
-    char_field_without_max = CharField(
-        default='', blank=True
-    )
+    char_field_without_max = CharField(default="", blank=True)
 
-    char_field_as_email = CharField(
-        max_length=100, validators=[EmailValidator(message='failed')], blank=True
-    )
+    char_field_as_email = CharField(max_length=100, validators=[EmailValidator(message="failed")], blank=True)
 
 
 class CharFieldModelTests(TestCase):
-
     def test_char_field_with_max_length_set(self):
-        test_bytestrings = [
-            (u'01234567891', 11),
-            (u'ążźsęćńół', 17),
-        ]
+        test_bytestrings = [(u"01234567891", 11), (u"ążźsęćńół", 17)]
 
         for test_text, byte_len in test_bytestrings:
-            test_instance = ModelWithCharField(
-                char_field_with_max=test_text,
-            )
+            test_instance = ModelWithCharField(char_field_with_max=test_text)
             self.assertRaisesMessage(
                 ValidationError,
-                'Ensure this value has at most 10 bytes (it has %d).' % byte_len,
+                "Ensure this value has at most 10 bytes (it has %d)." % byte_len,
                 test_instance.full_clean,
             )
 
     def test_char_field_with_not_max_length_set(self):
-        longest_valid_value = u'0123456789' * 150
-        too_long_value = longest_valid_value + u'more'
+        longest_valid_value = u"0123456789" * 150
+        too_long_value = longest_valid_value + u"more"
 
-        test_instance = ModelWithCharField(
-            char_field_without_max=longest_valid_value,
-        )
+        test_instance = ModelWithCharField(char_field_without_max=longest_valid_value)
         test_instance.full_clean()  # max not reached so it's all good
 
         test_instance.char_field_without_max = too_long_value
         self.assertRaisesMessage(
-            ValidationError,
-            u'Ensure this value has at most 1500 bytes (it has 1504).',
-            test_instance.full_clean,
-         )
+            ValidationError, u"Ensure this value has at most 1500 bytes (it has 1504).", test_instance.full_clean
+        )
 
     def test_additional_validators_work(self):
-        test_instance = ModelWithCharField(char_field_as_email='bananas')
-        self.assertRaisesMessage(ValidationError, 'failed', test_instance.full_clean)
+        test_instance = ModelWithCharField(char_field_as_email="bananas")
+        self.assertRaisesMessage(ValidationError, "failed", test_instance.full_clean)
 
     def test_too_long_max_value_set(self):
         try:
+
             class TestModel(models.Model):
                 test_char_field = CharField(max_length=1501)
+
         except AssertionError as e:
-            self.assertEqual(
-                str(e),
-                'CharFields max_length must not be greater than 1500 bytes.',
-            )
+            self.assertEqual(str(e), "CharFields max_length must not be greater than 1500 bytes.")
 
 
 class ModelWithCharOrNoneField(models.Model):
@@ -91,7 +66,6 @@ class ModelWithCharOrNoneField(models.Model):
 
 
 class CharOrNoneFieldTests(TestCase):
-
     def test_char_or_none_field(self):
         # Ensure that empty strings are coerced to None on save
         obj = ModelWithCharOrNoneField.objects.create(char_or_none_field="")
@@ -100,7 +74,6 @@ class CharOrNoneFieldTests(TestCase):
 
 
 class StringReferenceRelatedSetFieldModelTests(TestCase):
-
     def test_can_update_related_field_from_form(self):
         related = ISOther.objects.create()
         thing = ISStringReferenceModel.objects.create(related_things={related})
@@ -113,12 +86,10 @@ class StringReferenceRelatedSetFieldModelTests(TestCase):
         class TestForm(forms.ModelForm):
             class Meta:
                 model = ISStringReferenceModel
-                fields = ("related_things", )
+                fields = ("related_things",)
 
         related = ISOther.objects.create()
-        post_data = {
-            "related_things": [ str(related.pk) ],
-        }
+        post_data = {"related_things": [str(related.pk)]}
 
         form = TestForm(post_data)
         self.assertTrue(form.is_valid())
@@ -127,20 +98,18 @@ class StringReferenceRelatedSetFieldModelTests(TestCase):
 
 
 class RelatedFieldPrefetchTests(TestCase):
-
     def test_prefetch_related(self):
         award = PFAwards.objects.create(name="award")
         author = PFAuthor.objects.create(awards={award})
         post = PFPost.objects.create(authors={author})
 
-        posts = list(PFPost.objects.all().prefetch_related('authors__awards'))
+        posts = list(PFPost.objects.all().prefetch_related("authors__awards"))
 
         with self.assertNumQueries(0):
             awards = list(posts[0].authors.all()[0].awards.all())
 
 
 class PickleTests(TestCase):
-
     def test_all_fields_are_pickleable(self):
         """ In order to work with Djangae's migrations, all fields must be pickeable. """
         fields = [
@@ -157,11 +126,9 @@ class PickleTests(TestCase):
             SetField(CharField(), default=set(["badger"])),
         ]
 
-        fields.extend([
-            RelatedListField(ModelWithCharField),
-            RelatedSetField(ModelWithCharField),
-            ShardedCounterField(),
-        ])
+        fields.extend(
+            [RelatedListField(ModelWithCharField), RelatedSetField(ModelWithCharField), ShardedCounterField()]
+        )
 
         for field in fields:
             try:
@@ -170,40 +137,39 @@ class PickleTests(TestCase):
                 self.fail("Could not pickle %r: %s" % (field, e))
 
 
-
 class BinaryFieldModelTests(TestCase):
-    binary_value = b'\xff'
+    binary_value = b"\xff"
 
     def test_insert(self):
 
-        obj = BinaryFieldModel.objects.create(binary = self.binary_value)
+        obj = BinaryFieldModel.objects.create(binary=self.binary_value)
         obj.save()
 
-        readout = BinaryFieldModel.objects.get(pk = obj.pk)
+        readout = BinaryFieldModel.objects.get(pk=obj.pk)
 
-        assert(readout.binary == self.binary_value)
+        assert readout.binary == self.binary_value
 
     def test_none(self):
 
         obj = BinaryFieldModel.objects.create()
         obj.save()
 
-        readout = BinaryFieldModel.objects.get(pk = obj.pk)
+        readout = BinaryFieldModel.objects.get(pk=obj.pk)
 
-        assert(readout.binary is None)
+        assert readout.binary is None
 
     def test_update(self):
 
         obj = BinaryFieldModel.objects.create()
         obj.save()
 
-        toupdate = BinaryFieldModel.objects.get(pk = obj.pk)
+        toupdate = BinaryFieldModel.objects.get(pk=obj.pk)
         toupdate.binary = self.binary_value
         toupdate.save()
 
-        readout = BinaryFieldModel.objects.get(pk = obj.pk)
+        readout = BinaryFieldModel.objects.get(pk=obj.pk)
 
-        assert(readout.binary == self.binary_value)
+        assert readout.binary == self.binary_value
 
 
 class CharFieldModel(models.Model):
@@ -211,7 +177,6 @@ class CharFieldModel(models.Model):
 
 
 class CharFieldModelTest(TestCase):
-
     def test_query(self):
         instance = CharFieldModel(char_field="foo")
         instance.save()
@@ -220,7 +185,7 @@ class CharFieldModelTest(TestCase):
         self.assertEqual(readout, instance)
 
     def test_query_unicode(self):
-        name = u'Jacqu\xe9s'
+        name = u"Jacqu\xe9s"
 
         instance = CharFieldModel(char_field=name)
         instance.save()
@@ -233,7 +198,7 @@ class CharFieldModelTest(TestCase):
         """ Test that unicode query can be performed in DEBUG mode,
             which will use CursorDebugWrapper and call last_executed_query.
         """
-        name = u'Jacqu\xe9s'
+        name = u"Jacqu\xe9s"
 
         instance = CharFieldModel(char_field=name)
         instance.save()
@@ -247,7 +212,6 @@ class DurationFieldModelWithDefault(models.Model):
 
 
 class DurationFieldModelTests(TestCase):
-
     def test_creates_with_default(self):
         instance = DurationFieldModelWithDefault()
 
@@ -275,13 +239,17 @@ class ModelWithNonNullableFieldAndDefaultValue(models.Model):
 # ModelWithNonNullableFieldAndDefaultValueTests verifies that we maintain same
 # behavior as Django with respect to a model field that is non-nullable with default value.
 class ModelWithNonNullableFieldAndDefaultValueTests(TestCase):
-
     def _create_instance_with_null_field_value(self):
 
         instance = ModelWithNonNullableFieldAndDefaultValue.objects.create(some_field=1)
 
-        entity = datastore.Get(datastore.Key.from_path(ModelWithNonNullableFieldAndDefaultValue._meta.db_table,
-                               instance.pk, namespace=connection.settings_dict["NAMESPACE"]))
+        entity = datastore.Get(
+            datastore.Key.from_path(
+                ModelWithNonNullableFieldAndDefaultValue._meta.db_table,
+                instance.pk,
+                namespace=connection.settings_dict["NAMESPACE"],
+            )
+        )
         del entity["some_field"]
         datastore.Put(entity)
 

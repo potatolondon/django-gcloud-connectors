@@ -34,7 +34,7 @@ class Atomic(ContextDecorator):
 atomic = Atomic
 
 
-def in_atomic_block(using='default'):
+def in_atomic_block(using="default"):
     conn = connections[using]
 
     if isinstance(conn, DatastoreConnection):

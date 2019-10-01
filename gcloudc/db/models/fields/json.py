@@ -25,7 +25,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from gcloudc.db.backends.datastore.indexing import Indexer, register_indexer, IgnoreForIndexing
 from gcloudc.forms.fields import JSONFormField, JSONWidget
 
-__all__ = ('JSONField',)
+__all__ = ("JSONField",)
 
 
 def dumps(value):
@@ -33,11 +33,7 @@ def dumps(value):
 
 
 def loads(txt, object_pairs_hook=None):
-    value = json.loads(
-        txt,
-        encoding=settings.DEFAULT_CHARSET,
-        object_pairs_hook=object_pairs_hook,
-    )
+    value = json.loads(txt, encoding=settings.DEFAULT_CHARSET, object_pairs_hook=object_pairs_hook)
     return value
 
 
@@ -46,6 +42,7 @@ class JSONDict(dict):
     Hack so repr() called by dumpdata will output JSON instead of
     Python formatted data.  This way fixtures will work!
     """
+
     def __repr__(self):
         return dumps(self)
 
@@ -54,6 +51,7 @@ class JSONUnicode(six.text_type):
     """
     As above
     """
+
     def __repr__(self):
         return dumps(self)
 
@@ -62,6 +60,7 @@ class JSONList(list):
     """
     As above
     """
+
     def __repr__(self):
         return dumps(self)
 
@@ -70,13 +69,14 @@ class JSONOrderedDict(OrderedDict):
     """
     As above
     """
+
     def __repr__(self):
         return dumps(self)
 
 
 class JSONKeyLookup(models.Lookup):
-    lookup_name = 'json_path'
-    operator = 'json_path'
+    lookup_name = "json_path"
+    operator = "json_path"
     bilateral_transforms = False
     lookup_supports_text = True  # Tell Djangae connector that we are OK on text fields
 
@@ -97,11 +97,11 @@ class JSONField(models.TextField):
     JSON objects seamlessly.  Main thingy must be a dict object."""
 
     def __init__(self, use_ordered_dict=False, *args, **kwargs):
-        if 'default' in kwargs:
-            if not callable(kwargs['default']):
+        if "default" in kwargs:
+            if not callable(kwargs["default"]):
                 raise TypeError("'default' must be a callable (e.g. 'dict' or 'list')")
         else:
-            kwargs['default'] = dict
+            kwargs["default"] = dict
 
         # use `collections.OrderedDict` rather than built-in `dict`
         self.use_ordered_dict = use_ordered_dict
@@ -110,7 +110,7 @@ class JSONField(models.TextField):
 
     def parse_json(self, value):
         """Convert our string value to JSON after we load it from the DB"""
-        if value is None or value == '':
+        if value is None or value == "":
             return {}
         elif isinstance(value, six.string_types):
             try:
@@ -159,6 +159,7 @@ class JSONField(models.TextField):
         """Returns a suitable description of this field for South."""
         # We'll just introspect the _actual_ field.
         from south.modelsinspector import introspector
+
         field_class = "django.db.models.fields.TextField"
         args, kwargs = introspector(self)
         # That's our definition!
@@ -167,14 +168,11 @@ class JSONField(models.TextField):
     def deconstruct(self):
         name, path, args, kwargs = super(JSONField, self).deconstruct()
         if self.default == {}:
-            del kwargs['default']
+            del kwargs["default"]
         return name, path, args, kwargs
 
     def formfield(self, **kwargs):
-        defaults = {
-            'form_class': JSONFormField,
-            'widget': JSONWidget,
-        }
+        defaults = {"form_class": JSONFormField, "widget": JSONWidget}
         defaults.update(kwargs)
         return super(JSONField, self).formfield(**defaults)
 
@@ -192,7 +190,7 @@ class JSONField(models.TextField):
         # Assume a key path lookup
         class LookupBuilder(models.Transform):
             source_expressions = []
-            lookup_name = 'json_path'
+            lookup_name = "json_path"
 
             def __init__(self, *args, **kwargs):
                 super(LookupBuilder, self).__init__(*args, **kwargs)
@@ -210,7 +208,7 @@ class JSONField(models.TextField):
 
 
 class JSONKeyLookupIndexer(Indexer):
-    OPERATOR = 'json_path'
+    OPERATOR = "json_path"
 
     def handles(self, field, operator):
         from gcloudc.db.models.fields.json import JSONField
@@ -261,10 +259,7 @@ class JSONKeyLookupIndexer(Indexer):
         return value
 
     def indexed_column_name(self, field_column, value, index):
-        return "_idx_json_path_{}_{}".format(
-            field_column,
-            index.split("__", 1)[-1]
-        )
+        return "_idx_json_path_{}_{}".format(field_column, index.split("__", 1)[-1])
 
 
 # Especially for JSON fields

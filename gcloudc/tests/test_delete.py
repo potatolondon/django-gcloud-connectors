@@ -5,6 +5,7 @@ from django.db import models
 
 class TestUser(models.Model):
     """Basic model defintion for use in test cases."""
+
     username = models.CharField(max_length=32)
 
     def __unicode__(self):
@@ -12,7 +13,6 @@ class TestUser(models.Model):
 
 
 class DeleteTestCase(TestCase):
-
     def test_entity_deleted(self):
         """Testing the basic `delete()` ORM interaction."""
 
@@ -25,7 +25,7 @@ class DeleteTestCase(TestCase):
             user_one.refresh_from_db()
 
         with self.assertRaises(TestUser.DoesNotExist):
-            TestUser.objects.get(username='A')
+            TestUser.objects.get(username="A")
 
         self.assertEqual(TestUser.objects.count(), 0)
 

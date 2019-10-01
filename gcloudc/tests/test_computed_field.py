@@ -15,7 +15,9 @@ class ComputedFieldModel(models.Model):
     class Meta:
         app_label = "gcloudc"
 
+
 # ------------------------
+
 
 class ComputedFieldTests(TestCase):
     def test_computed_field(self):
@@ -34,4 +36,3 @@ class ComputedFieldTests(TestCase):
         instance = ComputedFieldModel(int_field=2, char_field="test")
         instance.save()
         self.assertEqual(instance.method_calc_field, "2_test")
-

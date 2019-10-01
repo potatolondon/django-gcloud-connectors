@@ -72,10 +72,10 @@ def query_is_unique(model, query):
                 break
 
         if unique_match:
-            return "|".join([model._meta.db_table] + [
-                "{}:{}".format(x, _format_value_for_identifier(query["{} =".format(x)]))
-                for x in field_names
-            ])
+            return "|".join(
+                [model._meta.db_table]
+                + ["{}:{}".format(x, _format_value_for_identifier(query["{} =".format(x)])) for x in field_names]
+            )
 
     return False
 
@@ -140,9 +140,7 @@ def unique_identifiers_from_entity(model, entity, ignore_pk=True, ignore_null_va
             for identifier_pairs in combo_identifiers:
                 constraint_prefix = get_top_concrete_parent(model)._meta.db_table
                 constraint_suffix = "|".join(identifier_pairs)
-                constraint_value = "{prefix}|{suffix}".format(
-                    prefix=constraint_prefix, suffix=constraint_suffix
-                )
+                constraint_value = "{prefix}|{suffix}".format(prefix=constraint_prefix, suffix=constraint_suffix)
                 identifiers.append(constraint_value)
 
     return identifiers
@@ -161,10 +159,7 @@ def _get_unique_fields_from_named_marker_key(unique_marker_key):
     named key.
     """
     fields_and_values = unique_marker_key.name.split("|")[1:]
-    return [
-        unique_field_name.split(":")[0] for
-        unique_field_name in fields_and_values
-    ]
+    return [unique_field_name.split(":")[0] for unique_field_name in fields_and_values]
 
 
 def _unique_combinations(model, ignore_pk=False):
@@ -190,10 +185,7 @@ def _unique_combinations(model, ignore_pk=False):
     ]
     """
     # first grab all the unique together constraints
-    unique_constraints = [
-        list(together_constraint) for
-        together_constraint in model._meta.unique_together
-    ]
+    unique_constraints = [list(together_constraint) for together_constraint in model._meta.unique_together]
 
     # then the column level constraints - special casing PK if required
     for field in model._meta.fields:
@@ -211,9 +203,4 @@ def _unique_combinations(model, ignore_pk=False):
 def _format_value_for_identifier(value):
     # AppEngine max key length is 500 chars, so if the value is a string we hexdigest it to reduce the length
     # otherwise we str() it as it's probably an int or bool or something.
-    return (
-        md5(value.encode("utf-8")).hexdigest() if
-        isinstance(value, str) else
-        str(value)
-    )
-
+    return md5(value.encode("utf-8")).hexdigest() if isinstance(value, str) else str(value)

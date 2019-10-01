@@ -1,4 +1,3 @@
-
 from django.db import models
 
 from . import TestCase
@@ -19,9 +18,7 @@ class ExcludingPKTests(TestCase):
         to_return = ExcludedPKModel.objects.exclude(pk__in=set(to_exclude)).values_list("pk", flat=True)[:2]
         self.assertEqual(2, len(to_return))
 
-        qs = ExcludedPKModel.objects.filter(
-            pk__in=to_return
-        )
+        qs = ExcludedPKModel.objects.filter(pk__in=to_return)
 
         self.assertEqual(2, len(qs))
 
@@ -29,6 +26,6 @@ class ExcludingPKTests(TestCase):
         ExcludedPKModel.objects.create(name="Apple", color="Red")
         ExcludedPKModel.objects.create(name="Orange", color="Orange")
 
-        self.assertEqual(1, ExcludedPKModel.objects.filter(
-            pk__in=["Apple", "Orange"]
-        ).exclude(pk__in=["Apple"]).count())
+        self.assertEqual(
+            1, ExcludedPKModel.objects.filter(pk__in=["Apple", "Orange"]).exclude(pk__in=["Apple"]).count()
+        )

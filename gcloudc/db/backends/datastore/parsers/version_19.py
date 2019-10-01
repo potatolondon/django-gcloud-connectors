@@ -9,6 +9,7 @@ except ImportError:
     class FlatValuesListIterable(object):
         pass
 
+
 try:
     from django.db.models.query import ValuesListQuerySet
 except ImportError:
@@ -21,13 +22,10 @@ from .base import BaseParser
 from ..query import WhereNode
 
 
-from djangae.db.utils import (
-    get_top_concrete_parent
-)
+from djangae.db.utils import get_top_concrete_parent
 
 
 class Parser(BaseParser):
-
     def _where_node_leaf_callback(self, node, negated, new_parent, connection, model, compiler):
         new_node = WhereNode(new_parent.using)
 
@@ -35,7 +33,7 @@ class Parser(BaseParser):
             raise NotSupportedError("Attempted probable subquery, these aren't supported on the datastore")
 
         # Leaf
-        if hasattr(node.lhs, 'target'):
+        if hasattr(node.lhs, "target"):
             # from Django 1.9, some node.lhs might not have a target attribute
             # as they might be wrapping date fields
             field = node.lhs.target
@@ -52,7 +50,7 @@ class Parser(BaseParser):
 
         # FIXME: This is a hack. In the base parser (> 1.9) we make use of the get_rhs_op
         # method on lookups to work out what these operators should be
-        if field.db_type(connection) in ('set', 'list'):
+        if field.db_type(connection) in ("set", "list"):
             if operator == "isempty":
                 operator = "isnull"
             elif operator == "overlap":
@@ -87,7 +85,7 @@ class Parser(BaseParser):
                 # non-relational datastore.
 
                 node.rhs = [x for x in node.rhs]  # Evaluate the queryset
-                rhs = node.process_rhs(None, connection) # Process the RHS as if it was a list
+                rhs = node.process_rhs(None, connection)  # Process the RHS as if it was a list
 
             elif isinstance(node.rhs, QuerySet):
                 # In Django 1.9, ValuesListQuerySet doesn't exist anymore, and instead
@@ -99,22 +97,22 @@ class Parser(BaseParser):
                     node.rhs = [x for x in node.rhs]
                 else:
                     # otherwise, we try to get the PK from the queryset
-                    node.rhs = list(node.rhs.values_list('pk', flat=True))
+                    node.rhs = list(node.rhs.values_list("pk", flat=True))
 
-                rhs = node.process_rhs(None, connection) # Process the RHS as if it was a list
+                rhs = node.process_rhs(None, connection)  # Process the RHS as if it was a list
 
             else:
                 rhs = node.process_rhs(None, connection)
         except EmptyResultSet:
-            if operator == 'in':
+            if operator == "in":
                 # Deal with this later
-                rhs = [ [] ]
+                rhs = [[]]
             else:
                 raise
 
-        if operator in ('in', 'range'):
+        if operator in ("in", "range"):
             rhs = rhs[-1]
-        elif operator == 'isnull':
+        elif operator == "isnull":
             rhs = node.rhs
         else:
             rhs = rhs[-1][0]
@@ -123,11 +121,11 @@ class Parser(BaseParser):
             lhs,
             "__".join([operator, node.path]) if hasattr(node, "path") else operator,
             rhs,
-            is_pk_field=field==model._meta.pk,
+            is_pk_field=field == model._meta.pk,
             negated=negated,
             lookup_name=node.lookup_name,
             namespace=connection.ops.connection.settings_dict.get("NAMESPACE"),
-            target_field=field
+            target_field=field,
         )
 
         # For some reason, this test:

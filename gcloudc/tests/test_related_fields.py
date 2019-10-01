@@ -7,16 +7,9 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.utils import IntegrityError
-from gcloudc.db.models.fields.related import (
-    RelatedListField,
-    RelatedSetField,
-    GenericRelationField
-)
+from gcloudc.db.models.fields.related import RelatedListField, RelatedSetField, GenericRelationField
 from gcloudc.db.models.fields.charfields import CharField
-from gcloudc.db.models.fields.iterable import (
-    ListField,
-    SetField
-)
+from gcloudc.db.models.fields.iterable import ListField, SetField
 
 
 class ISOther(models.Model):
@@ -39,10 +32,7 @@ class RelationWithoutReverse(models.Model):
 class ISModel(models.Model):
     related_things = RelatedSetField(ISOther)
     related_list = RelatedListField(ISOther, related_name="ismodel_list")
-    limted_related = RelatedSetField(
-        RelationWithoutReverse,
-        limit_choices_to={'name': 'banana'}, related_name="+"
-    )
+    limted_related = RelatedSetField(RelationWithoutReverse, limit_choices_to={"name": "banana"}, related_name="+")
     children = RelatedSetField("self", related_name="+")
 
     class Meta:
@@ -65,12 +55,12 @@ class IterableFieldsWithValidatorsModel(models.Model):
 
 
 class ModelDatabaseA(models.Model):
-    set_of_bs = RelatedSetField('ModelDatabaseB', related_name='+')
-    list_of_bs = RelatedListField('ModelDatabaseB', related_name='+')
+    set_of_bs = RelatedSetField("ModelDatabaseB", related_name="+")
+    list_of_bs = RelatedListField("ModelDatabaseB", related_name="+")
 
 
 class ModelDatabaseB(models.Model):
-    test_database = 'ns1'
+    test_database = "ns1"
 
 
 class IterableRelatedModel(models.Model):
@@ -85,8 +75,8 @@ class RelationWithOverriddenDbTable(models.Model):
 
 class Post(models.Model):
     content = models.TextField()
-    tags = RelatedSetField('Tag', related_name='posts')
-    ordered_tags = RelatedListField('Tag')
+    tags = RelatedSetField("Tag", related_name="posts")
+    ordered_tags = RelatedListField("Tag")
 
 
 class Tag(models.Model):
@@ -113,31 +103,20 @@ class RelatedListFieldRemoveDuplicatesModel(models.Model):
 class RelatedListFieldRemoveDuplicatesForm(forms.ModelForm):
     class Meta:
         model = RelatedListFieldRemoveDuplicatesModel
-        fields = ['related_list_field']
+        fields = ["related_list_field"]
 
 
 class RelatedIterableFieldTests(TestCase):
     """ Combined tests for common RelatedListField and RelatedSetField tests. """
+
     multi_db = True
 
     def test_cannot_have_min_length_and_blank(self):
         """ Having min_length=X, blank=True doesn't make any sense, especially when you consider
             that django will skip the min_length check when the value (list/set)is empty.
         """
-        self.assertRaises(
-            ImproperlyConfigured,
-            RelatedListField,
-            ISModel,
-            min_length=1,
-            blank=True
-        )
-        self.assertRaises(
-            ImproperlyConfigured,
-            RelatedSetField,
-            ISModel,
-            min_length=1,
-            blank=True
-        )
+        self.assertRaises(ImproperlyConfigured, RelatedListField, ISModel, min_length=1, blank=True)
+        self.assertRaises(ImproperlyConfigured, RelatedSetField, ISModel, min_length=1, blank=True)
 
     def test_related_list_field_set_field_min_max_lengths_valid(self):
         """ Test that when the min_legnth and max_length of a ListField and SetField are correct
@@ -224,8 +203,7 @@ class RelatedIterableFieldTests(TestCase):
             others.append(ISOther.objects.create())
 
         instance = IterableRelatedModel(
-            related_set_ids=[str(x.pk) for x in others],
-            related_list_ids=[str(x.pk) for x in others],
+            related_set_ids=[str(x.pk) for x in others], related_list_ids=[str(x.pk) for x in others]
         )
 
         instance.save()
@@ -240,8 +218,7 @@ class RelatedIterableFieldTests(TestCase):
             others.append(StringPkModel.objects.create(name=str(x)))
 
         instance = IterableRelatedWithNonIntPkModel(
-            related_set_ids=[x.pk for x in others],
-            related_list_ids=[x.pk for x in others],
+            related_set_ids=[x.pk for x in others], related_list_ids=[x.pk for x in others]
         )
 
         instance.save()
@@ -280,7 +257,6 @@ class RelatedIterableFieldTests(TestCase):
 
 
 class RelatedListFieldModelTests(TestCase):
-
     def test_values_list_queries_work(self):
         a, b = ISOther.objects.create(name="A"), ISOther.objects.create(name="B")
         thing = ISModel.objects.create(related_list_ids=[a.pk, b.pk])
@@ -304,7 +280,7 @@ class RelatedListFieldModelTests(TestCase):
         a, b = ISOther.objects.create(), ISOther.objects.create()
         thing = ISModel.objects.create(related_list_ids=[a.pk, b.pk])
 
-        with sleuth.watch('gcloudc.db.backends.datastore.meta_queries.QueryByKeys.__init__') as get:
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.QueryByKeys.__init__") as get:
             ret = thing.related_list.all()[0]
 
             self.assertEqual(1, get.call_count)
@@ -333,12 +309,10 @@ class RelatedListFieldModelTests(TestCase):
         class TestForm(forms.ModelForm):
             class Meta:
                 model = ISModel
-                fields = ("related_list", )
+                fields = ("related_list",)
 
         related = ISOther.objects.create()
-        post_data = {
-            "related_list": [ str(related.pk) ],
-        }
+        post_data = {"related_list": [str(related.pk)]}
 
         form = TestForm(post_data)
         self.assertTrue(form.is_valid())
@@ -350,31 +324,33 @@ class RelatedListFieldModelTests(TestCase):
         make sure that remove_duplicates option works fine for RelatedListField
         """
         instance_one, instance_two, instance_three, instance_four, instance_five = [
-            RelatedCharFieldModel.objects.create(
-                char_field=str(x)
-            ) for x in range(5)
+            RelatedCharFieldModel.objects.create(char_field=str(x)) for x in range(5)
         ]
-        data = {'related_list_field': [
-            instance_two.pk, instance_three.pk, instance_one.pk, instance_two.pk, instance_four.pk
-        ]}
+        data = {
+            "related_list_field": [
+                instance_two.pk,
+                instance_three.pk,
+                instance_one.pk,
+                instance_two.pk,
+                instance_four.pk,
+            ]
+        }
         form = RelatedListFieldRemoveDuplicatesForm(data)
         self.assertTrue(form.is_valid())
         obj = form.save()
 
         self.assertEqual(
-            obj.related_list_field_ids,
-            [instance_two.pk, instance_three.pk, instance_one.pk, instance_four.pk]
+            obj.related_list_field_ids, [instance_two.pk, instance_three.pk, instance_one.pk, instance_four.pk]
         )
         obj.related_list_field.add(instance_four, instance_five)
         obj.save()
         self.assertEqual(
             obj.related_list_field_ids,
-            [instance_two.pk, instance_three.pk, instance_one.pk, instance_four.pk, instance_five.pk]
+            [instance_two.pk, instance_three.pk, instance_one.pk, instance_four.pk, instance_five.pk],
         )
 
 
 class RelatedSetFieldModelTests(TestCase):
-
     def test_can_update_related_field_from_form(self):
         related = ISOther.objects.create()
         thing = ISModel.objects.create(related_things={related})
@@ -389,19 +365,17 @@ class RelatedSetFieldModelTests(TestCase):
         for i in range(2):
             Post.objects.create(content="Bananas", tags={tag})
 
-        posts = list(Post.objects.prefetch_related('tags').all())
+        posts = list(Post.objects.prefetch_related("tags").all())
         self.assertNumQueries(0, list, posts[0].tags.all())
 
     def test_saving_forms(self):
         class TestForm(forms.ModelForm):
             class Meta:
                 model = ISModel
-                fields = ("related_things", )
+                fields = ("related_things",)
 
         related = ISOther.objects.create()
-        post_data = {
-            "related_things": [ str(related.pk) ],
-        }
+        post_data = {"related_things": [str(related.pk)]}
 
         form = TestForm(post_data)
         self.assertTrue(form.is_valid())
@@ -410,7 +384,6 @@ class RelatedSetFieldModelTests(TestCase):
 
 
 class InstanceListFieldTests(TestCase):
-
     def test_deserialization(self):
         i1 = ISOther.objects.create(pk=1)
         i2 = ISOther.objects.create(pk=2)
@@ -419,11 +392,7 @@ class InstanceListFieldTests(TestCase):
         self.assertItemsEqual([i1, i2], ISModel._meta.get_field("related_list").to_python("[1, 2]"))
 
     def test_prefetch_related(self):
-        tags = [
-            Tag.objects.create(name="1"),
-            Tag.objects.create(name="2"),
-            Tag.objects.create(name="3")
-        ]
+        tags = [Tag.objects.create(name="1"), Tag.objects.create(name="2"), Tag.objects.create(name="3")]
 
         # Extra one to make sure we're filtering properly
         Tag.objects.create(name="unused")
@@ -433,7 +402,7 @@ class InstanceListFieldTests(TestCase):
 
         with self.assertNumQueries(2):
             # 1 query on Posts + 1 query on Tags
-            posts = list(Post.objects.prefetch_related('ordered_tags').all())
+            posts = list(Post.objects.prefetch_related("ordered_tags").all())
 
         with self.assertNumQueries(0):
             posts[0].tags.all()
@@ -475,18 +444,18 @@ class InstanceListFieldTests(TestCase):
         main.related_list.add(other)
         main.save()
 
-        self.assertEqual([other.pk,], main.related_list_ids)
+        self.assertEqual([other.pk], main.related_list_ids)
         self.assertEqual(list(ISOther.objects.filter(pk__in=main.related_list_ids)), list(main.related_list.all()))
         self.assertEqual([main], list(other.ismodel_list.all()))
 
         main.related_list.remove(other)
         self.assertFalse(main.related_list)
 
-        main.related_list = [other2, ]
-        self.assertEqual([other2.pk, ], main.related_list_ids)
+        main.related_list = [other2]
+        self.assertEqual([other2.pk], main.related_list_ids)
 
         with self.assertRaises(AttributeError):
-            other.ismodel_list = [main, ]
+            other.ismodel_list = [main]
 
         without_reverse = RelationWithoutReverse.objects.create(name="test3")
         self.assertFalse(hasattr(without_reverse, "ismodel_list"))
@@ -551,8 +520,8 @@ class InstanceListFieldTests(TestCase):
         main.related_list.add(other, other1, other2, other3)
         main.save()
         self.assertEqual(main.related_list.count(), 4)
-        self.assertEqual([other.pk, other1.pk, other2.pk, other3.pk, ], main.related_list_ids)
-        self.assertItemsEqual([other, other1, other2, other3, ], main.related_list.all())
+        self.assertEqual([other.pk, other1.pk, other2.pk, other3.pk], main.related_list_ids)
+        self.assertItemsEqual([other, other1, other2, other3], main.related_list.all())
         main.related_list.clear()
         main.save()
         self.assertEqual([], main.related_list_ids)
@@ -567,10 +536,10 @@ class InstanceListFieldTests(TestCase):
         other1 = ISOther.objects.create()
         other2 = ISOther.objects.create()
         other3 = ISOther.objects.create()
-        main.related_list.add(other, other1, other2, other1, other3,)
+        main.related_list.add(other, other1, other2, other1, other3)
         main.save()
-        self.assertEqual([other.pk, other1.pk, other2.pk, other1.pk, other3.pk, ], main.related_list_ids)
-        self.assertItemsEqual([other, other1, other2, other1, other3, ], main.related_list.all())
+        self.assertEqual([other.pk, other1.pk, other2.pk, other1.pk, other3.pk], main.related_list_ids)
+        self.assertItemsEqual([other, other1, other2, other1, other3], main.related_list.all())
 
     def test_slicing(self):
         main = ISModel.objects.create()
@@ -578,10 +547,10 @@ class InstanceListFieldTests(TestCase):
         other1 = ISOther.objects.create()
         other2 = ISOther.objects.create()
         other3 = ISOther.objects.create()
-        main.related_list.add(other, other1, other2, other1, other3,)
+        main.related_list.add(other, other1, other2, other1, other3)
         main.save()
-        self.assertItemsEqual([other, other1, ], main.related_list.all()[:2])
-        self.assertItemsEqual([other1, ], main.related_list.all()[1:2])
+        self.assertItemsEqual([other, other1], main.related_list.all()[:2])
+        self.assertItemsEqual([other1], main.related_list.all()[1:2])
         self.assertEqual(other1, main.related_list.all()[1:2][0])
 
     def test_filtering(self):
@@ -590,27 +559,23 @@ class InstanceListFieldTests(TestCase):
         other1 = ISOther.objects.create(name="two")
         other2 = ISOther.objects.create(name="one")
         ISOther.objects.create(name="three")
-        main.related_list.add(other, other1, other2, other1, other2,)
+        main.related_list.add(other, other1, other2, other1, other2)
         main.save()
         self.assertItemsEqual([other, other2, other2], main.related_list.filter(name="one"))
 
     def test_related_list_field_serializes_and_deserializes(self):
         obj = ISModel.objects.create()
-        foo = ISOther.objects.create(name='foo')
-        bar = ISOther.objects.create(name='bar')
+        foo = ISOther.objects.create(name="foo")
+        bar = ISOther.objects.create(name="bar")
         obj.related_list.add(foo, bar)
         obj.save()
 
-        data = serializers.serialize('json', [obj])
-        new_obj = next(serializers.deserialize('json', data)).object
-        self.assertEqual(
-            list(new_obj.related_list.all()),
-            [foo, bar],
-        )
+        data = serializers.serialize("json", [obj])
+        new_obj = next(serializers.deserialize("json", data)).object
+        self.assertEqual(list(new_obj.related_list.all()), [foo, bar])
 
 
 class InstanceSetFieldTests(TestCase):
-
     def test_deserialization(self):
         i1 = ISOther.objects.create(pk=1)
         i2 = ISOther.objects.create(pk=2)
@@ -713,18 +678,15 @@ class InstanceSetFieldTests(TestCase):
 
     def test_related_set_field_serializes_and_deserializes(self):
         obj = ISModel.objects.create()
-        foo = ISOther.objects.create(name='foo')
-        bar = ISOther.objects.create(name='bar')
+        foo = ISOther.objects.create(name="foo")
+        bar = ISOther.objects.create(name="bar")
         obj.related_things.add(foo, bar)
         obj.save()
 
-        data = serializers.serialize('json', [obj])
+        data = serializers.serialize("json", [obj])
 
-        new_obj = next(serializers.deserialize('json', data)).object
-        self.assertEqual(
-            set(new_obj.related_things.all()),
-            set([foo, bar]),
-        )
+        new_obj = next(serializers.deserialize("json", data)).object
+        self.assertEqual(set(new_obj.related_things.all()), set([foo, bar]))
 
 
 class TestGenericRelationField(TestCase):
@@ -769,7 +731,7 @@ class TestGenericRelationField(TestCase):
         instance.unique_relation_to_anything = None
         instance.save()
         GenericRelationModel.objects.create(unique_relation_to_anything=None)
-        GenericRelationModel.objects.create() # It should work even if we don't explicitly set it to None
+        GenericRelationModel.objects.create()  # It should work even if we don't explicitly set it to None
 
     def test_saving_forms(self):
         class TestForm(forms.ModelForm):
@@ -778,10 +740,7 @@ class TestGenericRelationField(TestCase):
                 fields = ("relation_to_anything",)
 
         related = ISOther.objects.create()
-        post_data = {
-            "relation_to_anything_0": related.__class__._meta.db_table,
-            "relation_to_anything_1": related.pk
-        }
+        post_data = {"relation_to_anything_0": related.__class__._meta.db_table, "relation_to_anything_1": related.pk}
 
         form = TestForm(post_data)
         self.assertTrue(form.is_valid())

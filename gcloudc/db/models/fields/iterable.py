@@ -14,7 +14,7 @@ from gcloudc.core.validators import MinItemsValidator, MaxItemsValidator
 from gcloudc.forms.fields import ListFormField, SetMultipleChoiceField
 
 # types that don't need to be quoted when serializing an iterable field
-_SERIALIZABLE_TYPES = six.integer_types + (float, Decimal,)
+_SERIALIZABLE_TYPES = six.integer_types + (float, Decimal)
 
 
 class _FakeModel(object):
@@ -29,10 +29,10 @@ class _FakeModel(object):
 
 
 class ContainsLookup(Lookup):
-    lookup_name = 'contains'
+    lookup_name = "contains"
 
     def get_rhs_op(self, connection, rhs):
-        return '= %s' % rhs
+        return "= %s" % rhs
 
     def get_prep_lookup(self):
         if hasattr(self.rhs, "__iter__") and not isinstance(self.rhs, str):
@@ -48,10 +48,10 @@ class ContainsLookup(Lookup):
 
 
 class IsEmptyLookup(Lookup):
-    lookup_name = 'isempty'
+    lookup_name = "isempty"
 
     def get_rhs_op(self, connection, rhs):
-        return 'isnull %s' % rhs
+        return "isnull %s" % rhs
 
     def get_prep_lookup(self):
         if self.rhs not in (True, False):
@@ -61,11 +61,11 @@ class IsEmptyLookup(Lookup):
 
 
 class OverlapLookup(Lookup):
-    lookup_name = 'overlap'
+    lookup_name = "overlap"
     get_db_prep_lookup_value_is_iterable = False
 
     def get_rhs_op(self, connection, rhs):
-        return 'IN %s' % rhs
+        return "IN %s" % rhs
 
     def get_db_prep_lookup(self, value, connection):
         # the In lookup wraps each element in a list, so we unwrap here
@@ -80,7 +80,7 @@ class OverlapLookup(Lookup):
 
 
 class IterableTransform(Transform):
-    lookup_name = 'item'
+    lookup_name = "item"
 
     def __init__(self, item_field_type, *args, **kwargs):
         super(IterableTransform, self).__init__(*args, **kwargs)
@@ -103,13 +103,14 @@ class IterableField(models.Field):
     choices_form_field_class = forms.MultipleChoiceField
 
     @property
-    def _iterable_type(self): raise NotImplementedError()
+    def _iterable_type(self):
+        raise NotImplementedError()
 
     def from_db_value(self, value, expression, connection, context):
         return self.to_python(value)
 
     def db_type(self, connection):
-        return 'list'
+        return "list"
 
     def get_lookup(self, name):
         # isnull is explitly not blocked here, because annoyingly Django adds isnull lookups implicitly on
@@ -138,15 +139,17 @@ class IterableField(models.Field):
         # *we* abuse None values for our own purposes (to represent an empty iterable) if someone else tries to then
         # all hell breaks loose
         if kwargs.get("null", False):
-            raise RuntimeError("IterableFields cannot be set as nullable (as the datastore doesn't differentiate None vs []")
+            raise RuntimeError(
+                "IterableFields cannot be set as nullable (as the datastore doesn't differentiate None vs []"
+            )
 
         kwargs["null"] = True
 
         kwargs["default"] = kwargs.get("default", [])
 
-        self._original_item_field_type = copy.deepcopy(item_field_type) # For deconstruction purposes
+        self._original_item_field_type = copy.deepcopy(item_field_type)  # For deconstruction purposes
 
-        if hasattr(item_field_type, 'attname'):
+        if hasattr(item_field_type, "attname"):
             item_field_type = item_field_type.__class__
 
         if callable(item_field_type):
@@ -159,8 +162,8 @@ class IterableField(models.Field):
 
         # We'll be pretending that item_field is a field of a model
         # with just one "value" field.
-        assert not hasattr(self.item_field_type, 'attname')
-        self.item_field_type.set_attributes_from_name('value')
+        assert not hasattr(self.item_field_type, "attname")
+        self.item_field_type.set_attributes_from_name("value")
 
         # Pop the 'min_length' and 'max_length' from the kwargs, if they're there, as this avoids
         # 'min_length' causing an error when calling super()
@@ -171,9 +174,7 @@ class IterableField(models.Field):
         # doesn't make sense, and partly because if the value (i.e. the list or set) is empty then
         # Django will skip the validators, thereby skipping the min_length check.
         if min_length and kwargs.get("blank"):
-            raise ImproperlyConfigured(
-                "Setting blank=True and min_length=%d is contradictory." % min_length
-            )
+            raise ImproperlyConfigured("Setting blank=True and min_length=%d is contradictory." % min_length)
 
         super(IterableField, self).__init__(*args, **kwargs)
 
@@ -216,11 +217,7 @@ class IterableField(models.Field):
                 if value.startswith("[") and value.endswith("]"):
                     value = value[1:-1].strip()
 
-                    value = [
-                        x.strip("'").strip("\"")
-                        for x in value.split(",")
-                        if len(value) > 2
-                    ]
+                    value = [x.strip("'").strip('"') for x in value.split(",") if len(value) > 2]
                 else:
                     raise ValueError("Unable to parse string into iterable field")
             else:
@@ -235,9 +232,11 @@ class IterableField(models.Field):
         """
         value = getattr(model_instance, self.attname)
         if value is None:
-            raise ValueError("You can't set a {} to None (did you mean {}?)".format(
-                self.__class__.__name__, str(self._iterable_type())
-            ))
+            raise ValueError(
+                "You can't set a {} to None (did you mean {}?)".format(
+                    self.__class__.__name__, str(self._iterable_type())
+                )
+            )
 
         if isinstance(value, six.string_types):
             # Catch accidentally assigning a string to a ListField
@@ -255,17 +254,13 @@ class IterableField(models.Field):
         if value == self._iterable_type([]):
             return None
 
-        return self._map(self.item_field_type.get_db_prep_save, value,
-                         connection=connection)
+        return self._map(self.item_field_type.get_db_prep_save, value, connection=connection)
 
-
-    def get_db_prep_lookup(self, lookup_type, value, connection,
-                           prepared=False):
+    def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
         """
         Passes the value through get_db_prep_lookup of item_field.
         """
-        return self.item_field_type.get_db_prep_lookup(
-            lookup_type, value, connection=connection, prepared=prepared)
+        return self.item_field_type.get_db_prep_lookup(lookup_type, value, connection=connection, prepared=prepared)
 
     def validate(self, value_list, model_instance):
         """ We want to override the default validate method from django.db.fields.Field, because it
@@ -288,13 +283,13 @@ class IterableField(models.Field):
             for value in value_list:
                 if value not in valid_values:
                     # TODO: if there is more than 1 invalid value then this should show all of the invalid values
-                    raise ValidationError(self.error_messages['invalid_choice'] % value)
+                    raise ValidationError(self.error_messages["invalid_choice"] % value)
         # Validate null-ness
         if value_list is None and not self.null:
-            raise ValidationError(self.error_messages['null'])
+            raise ValidationError(self.error_messages["null"])
 
         if not self.blank and not value_list:
-            raise ValidationError(self.error_messages['blank'])
+            raise ValidationError(self.error_messages["blank"])
 
         # apply the default items validation rules
         for value in value_list:
@@ -305,27 +300,25 @@ class IterableField(models.Field):
             NB: The choices must be set on *this* field, e.g. this_field = ListField(CharField(), choices=x)
             as opposed to: this_field = ListField(CharField(choices=x))
         """
-        #Largely lifted straight from Field.formfield() in django.models.__init__.py
-        defaults = {'required': not self.blank, 'label': capfirst(self.verbose_name), 'help_text': self.help_text}
-        if self.has_default(): #No idea what this does
+        # Largely lifted straight from Field.formfield() in django.models.__init__.py
+        defaults = {"required": not self.blank, "label": capfirst(self.verbose_name), "help_text": self.help_text}
+        if self.has_default():  # No idea what this does
             if callable(self.default):
-                defaults['initial'] = self.default
-                defaults['show_hidden_initial'] = True
+                defaults["initial"] = self.default
+                defaults["show_hidden_initial"] = True
             else:
-                defaults['initial'] = self.get_default()
+                defaults["initial"] = self.get_default()
 
         if self.choices:
             form_field_class = self.choices_form_field_class
-            defaults['choices'] = self.get_choices(include_blank=False) #no empty value on a multi-select
+            defaults["choices"] = self.get_choices(include_blank=False)  # no empty value on a multi-select
         else:
             form_field_class = ListFormField
         defaults.update(**kwargs)
         return form_field_class(**defaults)
 
     def value_to_string(self, obj):
-        return "[" + ",".join(
-            _serialize_value(o) for o in self.value_from_object(obj)
-        ) + "]"
+        return "[" + ",".join(_serialize_value(o) for o in self.value_from_object(obj)) + "]"
 
 
 # New API
@@ -336,10 +329,9 @@ IterableField.register_lookup(IsEmptyLookup)
 
 class ListField(IterableField):
     def __init__(self, *args, **kwargs):
-        self.ordering = kwargs.pop('ordering', None)
+        self.ordering = kwargs.pop("ordering", None)
         if self.ordering is not None and not callable(self.ordering):
-            raise TypeError("'ordering' has to be a callable or None, "
-                            "not of type %r." % type(self.ordering))
+            raise TypeError("'ordering' has to be a callable or None, " "not of type %r." % type(self.ordering))
         super(ListField, self).__init__(*args, **kwargs)
 
     def get_internal_type(self):
@@ -359,7 +351,7 @@ class ListField(IterableField):
 
     def deconstruct(self):
         name, path, args, kwargs = super(ListField, self).deconstruct()
-        kwargs['ordering'] = self.ordering
+        kwargs["ordering"] = self.ordering
         return name, path, args, kwargs
 
 
@@ -376,7 +368,7 @@ class SetField(IterableField):
         return "SetField"
 
     def db_type(self, connection):
-        return 'set'
+        return "set"
 
     def get_db_prep_save(self, *args, **kwargs):
         ret = super(SetField, self).get_db_prep_save(*args, **kwargs)
@@ -395,7 +387,7 @@ def _serialize_value(value):
     if isinstance(value, _SERIALIZABLE_TYPES):
         return str(value)
 
-    if hasattr(value, 'isoformat'):
+    if hasattr(value, "isoformat"):
         # handle datetime, date, and time objects
         value = value.isoformat()
     elif not isinstance(value, six.string_types):

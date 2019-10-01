@@ -1,27 +1,14 @@
 import copy
 import threading
-from functools import (
-    cmp_to_key,
-    partial,
-)
+from functools import cmp_to_key, partial
 from itertools import groupby
 
 from django.conf import settings
 from google.cloud.datastore.key import Key
 
-from . import (
-    POLYMODEL_CLASS_ATTRIBUTE,
-    caching,
-)
-from .query_utils import (
-    compare_keys,
-    get_filter,
-    is_keys_only,
-)
-from .utils import (
-    django_ordering_comparison,
-    entity_matches_query,
-)
+from . import POLYMODEL_CLASS_ATTRIBUTE, caching
+from .query_utils import compare_keys, get_filter, is_keys_only
+from .utils import django_ordering_comparison, entity_matches_query
 
 
 class AsyncMultiQuery(object):
@@ -85,10 +72,7 @@ class AsyncMultiQuery(object):
             def run(self):
                 # Evaluate the result set in the thread, but return an iterator
                 # so we can change this if necessary without breaking assumptions elsewhere
-                result_queues[i] = (
-                    x.key if keys_only else x
-                    for x in self.query.fetch(**query_run_args)
-                )
+                result_queues[i] = (x.key if keys_only else x for x in self.query.fetch(**query_run_args))
                 self.results_fetched = True
 
         if self._query_decorator:
@@ -193,9 +177,7 @@ class AsyncMultiQuery(object):
         # We have to assume that one branch might return all the results and as
         # offsetting is done by skipping results we need to get offset + limit results
         # from each branch
-        results = self._fetch_results(
-            limit=(offset or 0) + limit if limit is not None else None
-        )
+        results = self._fetch_results(limit=(offset or 0) + limit if limit is not None else None)
 
         # Go through each outstanding result queue and store
         # the next entry of each (None if the result queue is done)
@@ -211,6 +193,7 @@ class AsyncMultiQuery(object):
 
         seen_keys = set()  # For de-duping results
         while any(next_entries):
+
             def get_next():
                 idx, lowest = None, None
 
@@ -237,11 +220,7 @@ class AsyncMultiQuery(object):
             if next_entity is None:
                 break
 
-            next_key = (
-                next_entity
-                if isinstance(next_entity, Key)
-                else next_entity.key
-            )
+            next_key = next_entity if isinstance(next_entity, Key) else next_entity.key
 
             # Make sure we haven't seen this result before before yielding
             if next_key not in seen_keys:
@@ -305,9 +284,7 @@ class QueryByKeys(object):
         self.query_count = len(self.queries)
         self.queries_by_key = {a: list(b) for a, b in groupby(self.queries, _get_key)}
 
-        self.max_allowable_queries = getattr(
-            settings, "DJANGAE_MAX_QUERY_BRANCHES", DEFAULT_MAX_ALLOWABLE_QUERIES
-        )
+        self.max_allowable_queries = getattr(settings, "DJANGAE_MAX_QUERY_BRANCHES", DEFAULT_MAX_ALLOWABLE_QUERIES)
         self.can_multi_query = self.query_count < self.max_allowable_queries
 
         self.ordering = ordering
@@ -364,27 +341,19 @@ class QueryByKeys(object):
             else:
                 results = AsyncMultiQuery(multi_query, orderings).fetch(limit=to_fetch)
         else:
-            results = transaction._rpc(self.connection).get(
-                [x for x in self.queries_by_key.keys()]
-            )
+            results = transaction._rpc(self.connection).get([x for x in self.queries_by_key.keys()])
 
         def iter_results(results):
             returned = 0
             # This is safe, because Django is fetching all results any way :(
-            sorted_results = sorted(
-                results,
-                key=cmp_to_key(partial(django_ordering_comparison, self.ordering))
-            )
+            sorted_results = sorted(results, key=cmp_to_key(partial(django_ordering_comparison, self.ordering)))
             sorted_results = [result for result in sorted_results if result is not None]
 
             for result in sorted_results:
                 if is_projection:
                     matches_query = True
                 else:
-                    matches_query = any(
-                        entity_matches_query(result, qry)
-                        for qry in self.queries_by_key[result.key]
-                    )
+                    matches_query = any(entity_matches_query(result, qry) for qry in self.queries_by_key[result.key])
 
                 if not matches_query:
                     continue
@@ -395,9 +364,7 @@ class QueryByKeys(object):
                     continue
                 else:
                     yield _convert_entity_based_on_query_options(
-                        result,
-                        self._keys_only_override or is_keys_only(base_query),
-                        base_query.projection
+                        result, self._keys_only_override or is_keys_only(base_query), base_query.projection
                     )
 
                     returned += 1
@@ -419,6 +386,7 @@ class UniqueQuery(object):
         This mimics a normal query but hits the cache if possible. It must
         be passed the set of unique fields that form a unique constraint
     """
+
     def __init__(self, unique_identifier, gae_query, model, namespace):
         self._identifier = unique_identifier
         self._gae_query = gae_query
@@ -444,23 +412,15 @@ class UniqueQuery(object):
 
         if ret is None:
             # We do a fast keys_only query to get the result
-            keys_query = rpc.Query(
-                self._gae_query._Query__kind, keys_only=True, namespace=self._namespace
-            )
+            keys_query = rpc.Query(self._gae_query._Query__kind, keys_only=True, namespace=self._namespace)
             keys_query.update(self._gae_query)
             keys = keys_query.Run(limit=limit, offset=offset)
 
             # Do a consistent get so we don't cache stale data, and recheck the result matches the query
-            ret = [
-                x for x in rpc.Get(keys)
-                if x and entity_matches_query(x, self._gae_query)
-            ]
+            ret = [x for x in rpc.Get(keys) if x and entity_matches_query(x, self._gae_query)]
             if len(ret) == 1:
                 caching.add_entities_to_cache(
-                    self._model,
-                    [ret[0]],
-                    caching.CachingSituation.DATASTORE_GET,
-                    self._namespace,
+                    self._model, [ret[0]], caching.CachingSituation.DATASTORE_GET, self._namespace
                 )
             return iter(ret)
 

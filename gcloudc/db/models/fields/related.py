@@ -9,22 +9,13 @@ from django.db.models.query import QuerySet
 from django.db.models.fields.related import ForeignObject, ForeignObjectRel
 from django.utils.functional import cached_property
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from gcloudc.forms.fields import (
-    encode_pk,
-    GenericRelationFormfield,
-    OrderedModelMultipleChoiceField,
-)
+from gcloudc.forms.fields import encode_pk, GenericRelationFormfield, OrderedModelMultipleChoiceField
 
 from django.db.models.query import FlatValuesListIterable
 
 # gcloudc
 from gcloudc.core.validators import MinItemsValidator, MaxItemsValidator
-from gcloudc.db.models.fields.iterable import (
-    IsEmptyLookup,
-    ContainsLookup,
-    OverlapLookup,
-    _serialize_value
-)
+from gcloudc.db.models.fields.iterable import IsEmptyLookup, ContainsLookup, OverlapLookup, _serialize_value
 
 
 class RelatedIteratorRel(ForeignObjectRel):
@@ -42,7 +33,7 @@ class RelatedIteratorRel(ForeignObjectRel):
 
     def is_hidden(self):
         "Should the related object be hidden?"
-        return self.related_name and self.related_name[-1] == '+'
+        return self.related_name and self.related_name[-1] == "+"
 
     def set_field_name(self):
         self.field_name = self.field_name or self.model._meta.pk.name
@@ -57,7 +48,6 @@ class RelatedIteratorRel(ForeignObjectRel):
 
 
 class OrderedQuerySet(QuerySet):
-
     def _fetch_all(self):
         """
             Fetch all uses the standard iterator but sorts the values on the
@@ -150,9 +140,8 @@ class OrderedQuerySet(QuerySet):
         if not isinstance(k, (slice,) + (int,)):
             raise TypeError
 
-        assert(
-            (not isinstance(k, slice) and (k >= 0)) or
-            (isinstance(k, slice) and (k.start is None or k.start >= 0) and (k.stop is None or k.stop >= 0))
+        assert (not isinstance(k, slice) and (k >= 0)) or (
+            isinstance(k, slice) and (k.start is None or k.start >= 0) and (k.stop is None or k.stop >= 0)
         )
 
         if self._result_cache is not None:
@@ -169,10 +158,10 @@ class OrderedQuerySet(QuerySet):
             else:
                 stop = None
             qs.ordered_pks = qs.ordered_pks[start:stop]
-            return list(qs)[::k.step] if k.step else qs
+            return list(qs)[:: k.step] if k.step else qs
 
         qs = self._clone()
-        qs.ordered_pks = [qs.ordered_pks[k], ]
+        qs.ordered_pks = [qs.ordered_pks[k]]
         return list(qs)[0]
 
 
@@ -186,14 +175,12 @@ class RelatedIteratorManagerBase(object):
         self.ordered = field.retain_underlying_order
 
         if reverse:
-            self.core_filters = {'%s__contains' % self.field.column: instance.pk}
+            self.core_filters = {"%s__contains" % self.field.column: instance.pk}
         else:
-            self.core_filters = {'pk__in': field.value_from_object(instance)}
+            self.core_filters = {"pk__in": field.value_from_object(instance)}
 
     def get_prefetch_queryset(self, instances, queryset=None):
-        related_model = (
-            self.field.related_model if hasattr(self.field, "related_model") else self.field.related.to
-        )
+        related_model = self.field.related_model if hasattr(self.field, "related_model") else self.field.related.to
         if not queryset:
             queryset = related_model.objects.all()
 
@@ -228,14 +215,16 @@ class RelatedIteratorManagerBase(object):
             lambda inst: inst._prefetch_instance_id,
             lambda obj: obj.pk,
             False,
-            self.field.name  # Use the field name as the cache name
+            self.field.name,  # Use the field name as the cache name
         )
 
     def get_queryset(self):
         db = self._db or router.db_for_read(self.model, instance=self.instance)
 
-        if (hasattr(self.instance, "_prefetched_objects_cache") and
-                self.field.name in self.instance._prefetched_objects_cache):
+        if (
+            hasattr(self.instance, "_prefetched_objects_cache")
+            and self.field.name in self.instance._prefetched_objects_cache
+        ):
 
             qs = self.instance._prefetched_objects_cache[self.field.name]
 
@@ -257,9 +246,7 @@ class RelatedIteratorManagerBase(object):
             qcls.ordered_pks = values[:]
         else:
             qcls = super(RelatedIteratorManagerBase, self).get_queryset()
-        return (
-            qcls.using(db)._next_is_sticky().filter(**self.core_filters)
-        )
+        return qcls.using(db)._next_is_sticky().filter(**self.core_filters)
 
     def add(self, *values):
         for value in values:
@@ -295,8 +282,10 @@ class RelatedIteratorManagerBase(object):
 
 def create_related_iter_manager(superclass, rel):
     """ Create a manager for the (reverse) relation which subclasses the related model's default manager. """
+
     class RelatedIteratorManager(RelatedIteratorManagerBase, superclass):
         pass
+
     return RelatedIteratorManager
 
 
@@ -308,7 +297,7 @@ class RelatedIteratorObjectsDescriptor(object):
     # In the example "publication.article_set", the article_set attribute is a
     # ManyRelatedObjectsDescriptor instance.
     def __init__(self, related):
-        self.related = related   # RelatedObject instance
+        self.related = related  # RelatedObject instance
 
     @cached_property
     def related_manager_cls(self):
@@ -319,10 +308,7 @@ class RelatedIteratorObjectsDescriptor(object):
 
         manager = self.related.related_model._default_manager.__class__
 
-        return create_related_iter_manager(
-            manager,
-            self.related.field.remote_field
-        )
+        return create_related_iter_manager(manager, self.related.field.remote_field)
 
     def __get__(self, instance, instance_type=None):
         if instance is None:
@@ -331,12 +317,7 @@ class RelatedIteratorObjectsDescriptor(object):
         rel_model = self.related.related_model
         rel_field = self.related.field
 
-        manager = self.related_manager_cls(
-            model=rel_model,
-            field=rel_field,
-            instance=instance,
-            reverse=True
-        )
+        manager = self.related_manager_cls(model=rel_model, field=rel_field, instance=instance, reverse=True)
 
         return manager
 
@@ -359,8 +340,7 @@ class ReverseRelatedObjectsDescriptor(object):
         # Dynamically create a class that subclasses the related model's
         # default manager.
         return create_related_iter_manager(
-            self.field.remote_field.model._default_manager.__class__,
-            self.field.remote_field.model
+            self.field.remote_field.model._default_manager.__class__, self.field.remote_field.model
         )
 
     def __get__(self, instance, instance_type=None):
@@ -368,10 +348,7 @@ class ReverseRelatedObjectsDescriptor(object):
             return self
 
         manager = self.related_manager_cls(
-            model=self.field.remote_field.model,
-            field=self.field,
-            instance=instance,
-            reverse=False
+            model=self.field.remote_field.model, field=self.field, instance=instance, reverse=False
         )
 
         return manager
@@ -410,7 +387,7 @@ class RelatedIteratorField(ForeignObject):
         # Make sure that we do nothing on cascade by default
         self._check_sane_on_delete_value(on_delete)
 
-        from_fields = ['self']
+        from_fields = ["self"]
         to_fields = [None]
 
         min_length, max_length = self._sanitize_min_and_max_length(kwargs)
@@ -455,9 +432,7 @@ class RelatedIteratorField(ForeignObject):
         # doesn't make sense, and partly because if the value (i.e. the list or set) is empty then
         # Django will skip the validators, thereby skipping the min_length check.
         if min_length and kwargs.get("blank"):
-            raise ImproperlyConfigured(
-                "Setting blank=True and min_length=%d is contradictory." % min_length
-            )
+            raise ImproperlyConfigured("Setting blank=True and min_length=%d is contradictory." % min_length)
 
         return min_length, max_length
 
@@ -471,24 +446,22 @@ class RelatedIteratorField(ForeignObject):
         # before we could check the lookups.
         assert len(targets) == len(sources)
         if len(lookups) > 1:
-            raise exceptions.FieldError(
-                '%s does not support nested lookups' % self.__class__.__name__
-            )
+            raise exceptions.FieldError("%s does not support nested lookups" % self.__class__.__name__)
 
         lookup_type = lookups[0]
         target = targets[0]
         source = sources[0]
 
         # use custom Lookups when applicable
-        if lookup_type in ['isempty', 'overlap', 'contains']:
-            if lookup_type == 'isempty':
+        if lookup_type in ["isempty", "overlap", "contains"]:
+            if lookup_type == "isempty":
                 root_constraint.add(IsEmptyLookup(target.get_col(alias, source), raw_value), AND)
-            elif lookup_type == 'overlap':
+            elif lookup_type == "overlap":
                 root_constraint.add(RelatedOverlapLookup(target.get_col(alias, source), raw_value), AND)
-            elif lookup_type == 'contains':
+            elif lookup_type == "contains":
                 root_constraint.add(RelatedContainsLookup(target.get_col(alias, source), raw_value), AND)
             return root_constraint
-        elif lookup_type in ('in', 'exact', 'isnull'):
+        elif lookup_type in ("in", "exact", "isnull"):
             raise TypeError(
                 "%s doesn't allow exact, in or isnull. Use contains, overlap or isempty respectively"
                 % self.__class__.__name__
@@ -507,7 +480,7 @@ class RelatedIteratorField(ForeignObject):
         return name, path, args, kwargs
 
     def get_attname(self):
-        return '%s_ids' % self.name
+        return "%s_ids" % self.name
 
     def get_attname_column(self):
         attname = self.get_attname()
@@ -522,7 +495,7 @@ class RelatedIteratorField(ForeignObject):
         # automatically. The funky name reduces the chance of an accidental
         # clash.
         rel_to = self.remote_field.model if self.remote_field else None
-        if (rel_to == "self" or rel_to == cls._meta.object_name):
+        if rel_to == "self" or rel_to == cls._meta.object_name:
             self.remote_field.related_name = "%s_rel_+" % name
 
         super(RelatedIteratorField, self).contribute_to_class(cls, name)
@@ -560,40 +533,36 @@ class RelatedIteratorField(ForeignObject):
         return ret
 
     def value_to_string(self, obj):
-        return u"[" + ",".join(
-            _serialize_value(o) for o in self.value_from_object(obj)
-        ) + "]"
+        return u"[" + ",".join(_serialize_value(o) for o in self.value_from_object(obj)) + "]"
 
     def formfield(self, **kwargs):
-        db = kwargs.pop('using', None)
-        form_class = kwargs.pop('form_class', forms.ModelMultipleChoiceField)
+        db = kwargs.pop("using", None)
+        form_class = kwargs.pop("form_class", forms.ModelMultipleChoiceField)
         defaults = {
-            'form_class': form_class,
-            'queryset': self.remote_field.model._default_manager.using(db).complex_filter(
+            "form_class": form_class,
+            "queryset": self.remote_field.model._default_manager.using(db).complex_filter(
                 self.remote_field.limit_choices_to
-            )
+            ),
         }
         defaults.update(kwargs)
         # If initial is passed in, it's a list of related objects, but the
         # MultipleChoiceField takes a list of IDs.
-        if defaults.get('initial') is not None:
-            initial = defaults['initial']
+        if defaults.get("initial") is not None:
+            initial = defaults["initial"]
             if callable(initial):
                 initial = initial()
-            defaults['initial'] = [i._get_pk_val() for i in initial]
+            defaults["initial"] = [i._get_pk_val() for i in initial]
         return super(RelatedIteratorField, self).formfield(**defaults)
 
     def get_lookup(self, lookup_name):
-        if lookup_name == 'isempty':
+        if lookup_name == "isempty":
             return IsEmptyLookup
-        elif lookup_name == 'overlap':
+        elif lookup_name == "overlap":
             return RelatedOverlapLookup
-        elif lookup_name == 'contains':
+        elif lookup_name == "contains":
             return RelatedContainsLookup
-        elif lookup_name in ('in', 'exact', 'isnull'):
-            raise TypeError(
-                "RelatedIteratorFields don't allow exact, in or isnull. Use contains, overlap or isempty"
-            )
+        elif lookup_name in ("in", "exact", "isnull"):
+            raise TypeError("RelatedIteratorFields don't allow exact, in or isnull. Use contains, overlap or isempty")
 
         return super(RelatedIteratorField, self).get_lookup(lookup_name)
 
@@ -612,14 +581,14 @@ class RelatedIteratorField(ForeignObject):
                 return list()
 
             ids = [
-                self.remote_field.model._meta.pk.to_python(x.strip("'").strip("\""))
+                self.remote_field.model._meta.pk.to_python(x.strip("'").strip('"'))
                 for x in value.split(",")
                 if len(value) > 2
             ]
             # Annoyingly Django special cases FK and M2M in the Python deserialization code,
             # to assign to the attname, whereas all other fields (including this one) are required to
             # populate field.name instead. So we have to query here... we have no choice :(
-            objs = self.remote_field.model._default_manager.db_manager('default').in_bulk(ids)
+            objs = self.remote_field.model._default_manager.db_manager("default").in_bulk(ids)
 
             # retain order
             return [objs.get(_id) for _id in ids if _id in objs]
@@ -633,9 +602,8 @@ RelatedIteratorField.register_lookup(IsEmptyLookup)
 
 
 class RelatedSetField(RelatedIteratorField):
-
     def db_type(self, connection):
-        return 'set'
+        return "set"
 
     def __init__(self, *args, **kwargs):
 
@@ -670,13 +638,13 @@ class RelatedListField(RelatedIteratorField):
     retain_underlying_order = True
 
     def db_type(self, connection):
-        return 'list'
+        return "list"
 
     def __init__(self, *args, **kwargs):
 
         kwargs["default"] = list
         kwargs["null"] = True
-        self.remove_duplicates = kwargs.pop('remove_duplicates', False)
+        self.remove_duplicates = kwargs.pop("remove_duplicates", False)
 
         super(RelatedListField, self).__init__(*args, **kwargs)
 
@@ -686,7 +654,7 @@ class RelatedListField(RelatedIteratorField):
         for hardcoded_kwarg in ["default", "null"]:
             del kwargs[hardcoded_kwarg]
 
-        kwargs['remove_duplicates'] = self.remove_duplicates
+        kwargs["remove_duplicates"] = self.remove_duplicates
 
         return name, path, args, kwargs
 
@@ -697,7 +665,7 @@ class RelatedListField(RelatedIteratorField):
         """
         # change the form_class in defaults from using ModelMultipleChoiceField
         # in preference for the gcloudc subclass OrderedModelMultipleChoiceField
-        kwargs['form_class'] = kwargs.pop('form_class', OrderedModelMultipleChoiceField)
+        kwargs["form_class"] = kwargs.pop("form_class", OrderedModelMultipleChoiceField)
         return super(RelatedListField, self).formfield(**kwargs)
 
     def save_form_data(self, instance, data):
@@ -772,16 +740,15 @@ class GenericRelationField(models.Field):
         Empty NULL values are specifically encoded so they can also be unique, this is different
         from Django's FK behaviour.
     """
+
     description = "Generic one-way relation field"
     form_class = GenericRelationFormfield
 
     def __init__(self, *args, **kwargs):
-        kwargs.update(
-            max_length=255,
-        )
+        kwargs.update(max_length=255)
 
-        if 'db_index' not in kwargs:
-            kwargs['db_index'] = True
+        if "db_index" not in kwargs:
+            kwargs["db_index"] = True
 
         super(GenericRelationField, self).__init__(*args, **kwargs)
 
@@ -825,9 +792,7 @@ class GenericRelationField(models.Field):
             raise ImproperlyConfigured("Unable to find model with db_table: {}".format(model_ref))
 
     def formfield(self, **kwargs):
-        defaults = {
-            'form_class': self.form_class,
-        }
+        defaults = {"form_class": self.form_class}
         defaults.update(kwargs)
         return super(GenericRelationField, self).formfield(**defaults)
 

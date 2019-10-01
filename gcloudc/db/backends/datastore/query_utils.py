@@ -37,6 +37,7 @@ def compare_keys(lhs, rhs):
         The App Engine API used to provide a key comparison, but for
         some reason the Cloud Datastore API doesn't :(
     """
+
     def cmp(a, b):
         return (a > b) - (a < b)
 

@@ -23,7 +23,7 @@ def evaluate_expression(expression, instance, connection):
     if isinstance(expression, Aggregate):
         raise NotSupportedError("Aggregate expressions are not supported on the datastore")
 
-    if hasattr(expression, 'name'):
+    if hasattr(expression, "name"):
         field = instance._meta.get_field(expression.name)
         return get_prepared_db_value(connection, instance._original, field)
 
@@ -31,18 +31,17 @@ def evaluate_expression(expression, instance, connection):
         field = expression.field
         return get_prepared_db_value(connection, instance._original, field)
 
-    if hasattr(expression, 'value'):
+    if hasattr(expression, "value"):
         return expression.value
 
-    if hasattr(expression, 'connector') and expression.connector in CONNECTORS:
-        if hasattr(expression, 'children'):
+    if hasattr(expression, "connector") and expression.connector in CONNECTORS:
+        if hasattr(expression, "children"):
             lhs, rhs = expression.children
         else:
             lhs, rhs = expression.lhs, expression.rhs
 
         return CONNECTORS[expression.connector](
-            evaluate_expression(lhs, instance, connection),
-            evaluate_expression(rhs, instance, connection),
+            evaluate_expression(lhs, instance, connection), evaluate_expression(rhs, instance, connection)
         )
 
     raise NotImplementedError("Support for expression %r isn't implemented", expression)

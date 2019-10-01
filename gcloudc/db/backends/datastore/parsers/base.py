@@ -5,17 +5,11 @@ from django.db import NotSupportedError
 from django.db.models.aggregates import Aggregate
 from django.db.models.expressions import Star
 from django.db.models.fields import FieldDoesNotExist
-from django.db.models.query import (
-    FlatValuesListIterable,
-    QuerySet,
-)
+from django.db.models.query import FlatValuesListIterable, QuerySet
 from django.db.models.sql.datastructures import EmptyResultSet
 from django.db.models.sql.query import Query as DjangoQuery
 
-from ..query import (
-    Query,
-    WhereNode,
-)
+from ..query import Query, WhereNode
 from ..utils import get_top_concrete_parent
 
 
@@ -44,11 +38,7 @@ def _get_concrete_fields_with_model(model):
     return [
         (f, f.model if f.model != model else None)
         for f in model._meta.get_fields()
-        if f.concrete and (
-            not f.is_relation or
-            f.one_to_one or
-            (f.many_to_one and f.related_model)
-        )
+        if f.concrete and (not f.is_relation or f.one_to_one or (f.many_to_one and f.related_model))
     ]
 
 
@@ -109,16 +99,17 @@ class BaseParser(object):
 
     def _prepare_for_transformation(self):
         from django.db.models.sql.where import NothingNode
+
         query = self.django_query
 
         def where_will_always_be_empty(where):
             if isinstance(where, NothingNode):
                 return True
 
-            if where.connector == 'AND' and any(isinstance(x, NothingNode) for x in where.children):
+            if where.connector == "AND" and any(isinstance(x, NothingNode) for x in where.children):
                 return True
 
-            if where.connector == 'OR' and len(where.children) == 1 and isinstance(where.children[0], NothingNode):
+            if where.connector == "OR" and len(where.children) == 1 and isinstance(where.children[0], NothingNode):
                 return True
 
             return False
@@ -195,7 +186,7 @@ class BaseParser(object):
         new_node = WhereNode(new_parent.using)
 
         def convert_rhs_op(node):
-            db_rhs = getattr(node.rhs, '_db', None)
+            db_rhs = getattr(node.rhs, "_db", None)
             if db_rhs is not None and db_rhs != connection.alias:
                 raise ValueError(
                     "Subqueries aren't allowed across different databases. Force "
@@ -204,8 +195,8 @@ class BaseParser(object):
 
             value = node.get_rhs_op(connection, node.rhs)
             operator = value.split()[0].lower().strip()
-            if operator == 'between':
-                operator = 'range'
+            if operator == "between":
+                operator = "range"
             return operator
 
         if not hasattr(node, "lhs"):
@@ -218,13 +209,13 @@ class BaseParser(object):
                 # perform validation etc.
                 node.process_rhs(compiler, connection)
             except EmptyResultSet:
-                if node.lookup_name == 'in':
+                if node.lookup_name == "in":
                     node.rhs = []
                 else:
                     raise
 
         # Leaf
-        if hasattr(node.lhs, 'target'):
+        if hasattr(node.lhs, "target"):
             # from Django 1.9, some node.lhs might not have a target attribute
             # as they might be wrapping date fields
             field = node.lhs.target
@@ -287,7 +278,7 @@ class BaseParser(object):
                 rhs = [x for x in node.rhs]
             else:
                 # otherwise, we try to get the PK from the queryset
-                rhs = list(node.rhs.values_list('pk', flat=True))
+                rhs = list(node.rhs.values_list("pk", flat=True))
         else:
             rhs = node.rhs
 
@@ -330,7 +321,7 @@ class BaseParser(object):
             connection=self.connection,
             negated=self.django_query.where.negated,
             model=self.model,
-            compiler=self.django_query.get_compiler(self.connection.alias)
+            compiler=self.django_query.get_compiler(self.connection.alias),
         )
 
         return output
@@ -389,18 +380,19 @@ class BaseParser(object):
                     dot_based_ordering = ordering.split(".")
                     if dot_based_ordering[0] == query.model._meta.db_table:
                         ordering = dot_based_ordering[1]
-                    elif dot_based_ordering[0].lstrip('-') == query.model._meta.db_table:
-                        ordering = '-{}'.format(dot_based_ordering[1])
+                    elif dot_based_ordering[0].lstrip("-") == query.model._meta.db_table:
+                        ordering = "-{}".format(dot_based_ordering[1])
                     else:
                         cross_table_ordering.add(ordering)
-                        continue # we don't want to add this ordering value
+                        continue  # we don't want to add this ordering value
                 new_result.append(ordering)
 
             if len(cross_table_ordering):
                 log_once(
                     logger.warning,
                     "The following orderings were ignored as cross-table orderings"
-                    " are not supported on the Datastore: %s", cross_table_ordering
+                    " are not supported on the Datastore: %s",
+                    cross_table_ordering,
                 )
 
             result = new_result
@@ -499,8 +491,7 @@ class BaseParser(object):
 
                     available = opts.get_all_field_names()
                     raise FieldError(
-                        "Cannot resolve keyword %r into field. "
-                        "Choices are: %s" % (col, ", ".join(available))
+                        "Cannot resolve keyword %r into field. " "Choices are: %s" % (col, ", ".join(available))
                     )
 
         # Reverse if not using standard ordering
@@ -518,7 +509,8 @@ class BaseParser(object):
             log_once(
                 logger.warning,
                 "The following orderings were ignored as cross-table and random orderings"
-                " are not supported on the Datastore: %s", diff
+                " are not supported on the Datastore: %s",
+                diff,
             )
 
         return final

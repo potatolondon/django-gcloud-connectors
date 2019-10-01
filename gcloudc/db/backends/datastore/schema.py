@@ -36,7 +36,6 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         """
         # Erm... is this part of the external interface that we have to implement?  Hopefully not.
 
-
     def quote_value(self, value):
         """ SQL, lolz. """
         return value
@@ -68,7 +67,6 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             Irrelevant for the Datastore.
         """
         pass
-
 
     def alter_db_table(self, model, old_db_table, new_db_table):
         """ Renames the table a model points to. """

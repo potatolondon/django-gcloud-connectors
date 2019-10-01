@@ -54,7 +54,7 @@ def _generate_insert_sql(command):
     params = {
         "table": command.model._meta.db_table,
         "columns": ", ".join(columns),
-        "values": _generate_values_expression(command.objs, columns)
+        "values": _generate_values_expression(command.objs, columns),
     }
 
     return (INSERT_PATTERN % params).replace("\n", " ").strip()
@@ -68,10 +68,12 @@ def _generate_where_expression(representation):
 
     return " OR ".join(where)
 
+
 def _quote_string(value):
     needs_quoting = isinstance(value, six.string_types)
     # in ANSI SQL as well as GQL, string literals are wrapped in single quotes
     return "'{}'".format(value) if needs_quoting else six.text_type(value)
+
 
 def _generate_select_sql(command, representation):
     has_offset = representation["low_mark"] > 0
@@ -97,13 +99,13 @@ def _generate_select_sql(command, representation):
     sql = "\n".join(lines)
 
     columns = (
-        "*" if not representation["columns"]
-        else ", ".join(sorted(representation["columns"])) # Just to make the output predictable
+        "*"
+        if not representation["columns"]
+        else ", ".join(sorted(representation["columns"]))  # Just to make the output predictable
     )
 
     ordering = [
-        ("%s %s" % (x.lstrip("-"), "DESC" if x.startswith("-") else "")).strip()
-        for x in representation["order_by"]
+        ("%s %s" % (x.lstrip("-"), "DESC" if x.startswith("-") else "")).strip() for x in representation["order_by"]
     ]
 
     replacements = {
@@ -112,7 +114,7 @@ def _generate_select_sql(command, representation):
         "offset": representation["low_mark"],
         "limit": (representation["high_mark"] or 0) - (representation["low_mark"] or 0),
         "where": _generate_where_expression(representation),
-        "order": ", ".join(ordering)
+        "order": ", ".join(ordering),
     }
 
     return (sql % replacements).replace("\n", " ").strip()
@@ -127,10 +129,11 @@ def _generate_delete_sql(command, representation):
 
     sql = "\n".join(lines)
 
-    return (sql % {
-        "table": representation["table"],
-        "where": _generate_where_expression(representation)
-    }).replace("\n", " ").strip()
+    return (
+        (sql % {"table": representation["table"], "where": _generate_where_expression(representation)})
+        .replace("\n", " ")
+        .strip()
+    )
 
 
 def _generate_update_sql(command, representation):
@@ -143,15 +146,13 @@ def _generate_update_sql(command, representation):
     sql = "\n".join(lines)
     columns = sorted([x[0].column for x in command.values])
 
-    values = {
-        x[0].column: six.text_type(x[2]) for x in command.values
-    }
+    values = {x[0].column: six.text_type(x[2]) for x in command.values}
 
     params = {
         "table": representation["table"],
         "columns": ", ".join(columns),
         "values": "(" + ", ".join([values[x] for x in columns]) + ")",
-        "where": _generate_where_expression(representation)
+        "where": _generate_where_expression(representation),
     }
 
     return (sql % params).replace("\n", " ").strip()

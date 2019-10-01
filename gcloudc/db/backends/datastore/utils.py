@@ -38,10 +38,7 @@ def get_model_from_db_table(db_table):
     # We use include_swapped=True because tests might need access to gauth User models which are
     # swapped if the user has a different custom user model
 
-    kwargs = {
-        "include_auto_created": True,
-        "include_swapped": True
-    }
+    kwargs = {"include_auto_created": True, "include_swapped": True}
 
     for model in apps.get_models(**kwargs):
         if model._meta.db_table == db_table:
@@ -63,20 +60,20 @@ def decimal_to_string(value, max_digits=16, decimal_places=0):
 
     # Handle sign separately.
     if value.is_signed():
-        sign = u'-'
+        sign = u"-"
         value = abs(value)
     else:
-        sign = u''
+        sign = u""
 
     # Let Django quantize and cast to a string.
     value = format_number(value, max_digits, decimal_places)
 
     # Pad with zeroes to a constant width.
-    n = value.find('.')
+    n = value.find(".")
     if n < 0:
         n = len(value)
     if n < max_digits - decimal_places:
-        value = u'0' * (max_digits - decimal_places - n) + value
+        value = u"0" * (max_digits - decimal_places - n) + value
     return sign + value
 
 
@@ -109,10 +106,7 @@ def get_prepared_db_value(connection, instance, field, raw=False):
     if hasattr(value, "prepare_database_save"):
         value = value.prepare_database_save(field)
     else:
-        value = field.get_db_prep_save(
-            value,
-            connection=connection
-        )
+        value = field.get_db_prep_save(value, connection=connection)
 
     value = connection.ops.value_for_db(value, field)
 
@@ -202,10 +196,7 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
             value = _field.get_db_prep_save(_field.get_default(), connection)
 
         if check_null and (not _field.null and not _field.primary_key) and value is None:
-            raise IntegrityError(
-                "You can't set %s (a non-nullable field) to None!" %
-                _field.name
-            )
+            raise IntegrityError("You can't set %s (a non-nullable field) to None!" % _field.name)
 
         is_primary_key = False
         if _field.primary_key and _field.model == inheritance_root:
@@ -233,8 +224,7 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
             unindex = False
             try:
                 values = indexer.prep_value_for_database(
-                    value, index,
-                    model=model, column=field.column, connection=connection
+                    value, index, model=model, column=field.column, connection=connection
                 )
             except IgnoreForIndexing as e:
                 # We mark this value as being wiped out for indexing
@@ -271,11 +261,7 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
     if primary_key is not None:
         args.append(primary_key)
 
-    key = Key(
-        *args,
-        namespace=connection.namespace,
-        project=connection.gcloud_project
-    )
+    key = Key(*args, namespace=connection.namespace, project=connection.gcloud_project)
 
     entity = Entity(key)
     entity.update(field_values)
@@ -306,9 +292,9 @@ class MockInstance(object):
     """
 
     def __init__(self, **kwargs):
-        is_adding = kwargs.pop('_is_adding', False)
-        self._original = kwargs.pop('_original', None)
-        self._meta = kwargs.pop('_meta', None)
+        is_adding = kwargs.pop("_is_adding", False)
+        self._original = kwargs.pop("_original", None)
+        self._meta = kwargs.pop("_meta", None)
 
         class State:
             adding = is_adding
@@ -327,15 +313,14 @@ class MockInstance(object):
 
 def key_exists(connection, key):
     from . import transaction
-    qry = transaction._rpc(connection).query(
-        namespace=key.namespace,
-        ancestor=key
-    )
+
+    qry = transaction._rpc(connection).query(namespace=key.namespace, ancestor=key)
     qry.keys_only()
     return bool([x for x in qry.fetch(1)])
 
 
 # Null-friendly comparison functions
+
 
 def lt(x, y):
     if x is None and y is not None:
@@ -399,26 +384,16 @@ def entity_matches_query(entity, query):
     """
     from . import meta_queries
 
-    OPERATORS = {
-        "=": lambda x, y: x == y,
-        "<": lt,
-        ">": gt,
-        "<=": lte,
-        ">=": gte
-    }
+    OPERATORS = {"=": lambda x, y: x == y, "<": lt, ">": gt, "<=": lte, ">=": gte}
 
     queries = [query]
     if isinstance(query, meta_queries.AsyncMultiQuery):
         raise NotImplementedError(
-            "We just need to separate the multiquery "
-            "into 'queries' then everything should work"
+            "We just need to separate the multiquery " "into 'queries' then everything should work"
         )
 
     for query in queries:
-        comparisons = chain(
-            [("__kind__", "=")],
-            [(x[0], x[1]) for x in query.filters]
-        )
+        comparisons = chain([("__kind__", "=")], [(x[0], x[1]) for x in query.filters])
 
         for ent_attr, op in comparisons:
             if ent_attr == "__key__":
