@@ -216,6 +216,7 @@ class RelatedIteratorManagerBase(object):
             lambda obj: obj.pk,
             False,
             self.field.name,  # Use the field name as the cache name
+            True
         )
 
     def get_queryset(self):

@@ -2,10 +2,22 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.core.validators import EmailValidator
-from django.db import connection, models
+from django.db import (
+    connection,
+    models,
+)
 from django.test import override_settings
-from gcloudc.db.models.fields.charfields import CharField, CharOrNoneField
-from gcloudc.db.models.fields.computed import ComputedCharField, ComputedBooleanField
+from gcloudc.db.models.fields.charfields import (
+    CharField,
+    CharOrNoneField,
+)
+from gcloudc.db.models.fields.computed import (
+    ComputedBooleanField,
+    ComputedCharField,
+    ComputedIntegerField,
+    ComputedPositiveIntegerField,
+    ComputedTextField
+)
 from google.cloud import datastore
 
 from . import TestCase
