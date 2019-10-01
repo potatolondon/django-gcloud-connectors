@@ -4,7 +4,8 @@ BASE_DIR = os.path.dirname(__file__)
 
 INSTALLED_APPS = (
     'gcloudc',
-    'gcloudc.commands'
+    'gcloudc.commands',
+    'gcloudc.tests'
 )
 
 DATABASES = {

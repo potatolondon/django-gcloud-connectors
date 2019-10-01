@@ -25,6 +25,7 @@ from .commands import DeleteCommand, FlushCommand, InsertCommand, SelectCommand,
 from .indexing import load_special_indexes
 from .utils import decimal_to_string, get_datastore_key, make_timezone_naive
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -249,7 +250,12 @@ class DatabaseOperations(BaseDatabaseOperations):
             if [y for y in tables if x.startswith("_djangae_idx_{}".format(y))]
         ]
 
-        return [FlushCommand(table, self.connection) for table in tables + additional_djangaeidx_tables]
+        unique_markers_table = "uniquemarker"
+
+        return [
+            FlushCommand(table, self.connection)
+            for table in tables + additional_djangaeidx_tables + [unique_markers_table]
+        ]
 
     def prep_lookup_key(self, model, value, field):
         if isinstance(value, six.string_types):

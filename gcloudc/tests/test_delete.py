@@ -1,22 +1,12 @@
 from . import TestCase
-
-from django.db import models
-
-
-class TestUser(models.Model):
-    """Basic model defintion for use in test cases."""
-
-    username = models.CharField(max_length=32)
-
-    def __unicode__(self):
-        return self.username
+from .models import TestUser
 
 
 class DeleteTestCase(TestCase):
     def test_entity_deleted(self):
         """Testing the basic `delete()` ORM interaction."""
 
-        user_one = TestUser.objects.create(username="A")
+        user_one = TestUser.objects.create(username="A", first_name="A", second_name="B")
         self.assertEqual(TestUser.objects.count(), 1)
 
         user_one.delete()
@@ -35,11 +25,11 @@ class DeleteTestCase(TestCase):
 
     def test_bulk_delete(self):
         """Testing the basic `delete()` ORM interaction."""
-        user_one = TestUser.objects.create(username="One")
-        user_two = TestUser.objects.create(username="Two")
-        user_three = TestUser.objects.create(username="Three")
+        TestUser.objects.create(username="One", first_name="A", second_name="B")
+        TestUser.objects.create(username="Two", first_name="B", second_name="B")
+        TestUser.objects.create(username="Three", first_name="C", second_name="B")
 
         self.assertEqual(TestUser.objects.count(), 3)
 
-        user_three = TestUser.objects.all().delete()
+        TestUser.objects.all().delete()
         self.assertEqual(TestUser.objects.count(), 0)

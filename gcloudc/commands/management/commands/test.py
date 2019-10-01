@@ -17,7 +17,11 @@ def locate_test():
 
     for i in range(index + 1, len(APPS_TO_CHECK)):
         app_label = APPS_TO_CHECK[i]
-        command = load_command_class(app_label, "test")
+        try:
+            command = load_command_class(app_label, "test")
+        except ModuleNotFoundError:
+            command = None
+
         if command:
             return command.__class__
     else:

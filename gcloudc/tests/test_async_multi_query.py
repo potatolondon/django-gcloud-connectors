@@ -1,14 +1,10 @@
-from django.db import NotSupportedError, models
+from django.db import NotSupportedError
 from django.test import override_settings
 
 import sleuth
 
 from . import TestCase
-
-
-class MultiQueryModel(models.Model):
-    field1 = models.IntegerField(null=True)
-    field2 = models.CharField(max_length=64)
+from .models import MultiQueryModel
 
 
 class AsyncMultiQueryTest(TestCase):

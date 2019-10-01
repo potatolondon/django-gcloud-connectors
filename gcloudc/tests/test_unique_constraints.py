@@ -1,41 +1,28 @@
 import sleuth
 
-from django.db import models
+from django.db import connection
 from django.db.utils import IntegrityError
 from django.test.utils import override_settings
 
-from gcloudc.db.backends.datastore.commands import BulkDeleteError
-from gcloudc.db.backends.datastore.unique_utils import _unique_combinations, _format_value_for_identifier
+from gcloudc.db.backends.datastore.unique_utils import _format_value_for_identifier
 from gcloudc.db.backends.datastore.transaction import TransactionFailedError
 from google.cloud.datastore.key import Key
 
 from . import TestCase
-from . import _init_datastore_client, get_kind_query
+
+from .models import TestUser, TestUserTwo
 
 
-class TestUser(models.Model):
-    """Basic model defintion for use in test cases."""
-
-    username = models.CharField(max_length=32, unique=True)
-    first_name = models.CharField(max_length=50)
-    second_name = models.CharField(max_length=50)
-
-    def __unicode__(self):
-        return self.username
-
-    class Meta:
-        app_label = "test"
-        unique_together = ("first_name", "second_name")
+def _get_client():
+    return connection.connection.gclient
 
 
-class TestUserTwo(models.Model):
-    username = models.CharField(max_length=32, unique=True)
-
-    class Meta:
-        app_label = "test"
-
-    class Djangae:
-        enforce_constraint_checks = True
+def get_kind_query(kind, keys_only=True):
+    datastore_client = _get_client()
+    query = datastore_client.query(kind=kind)
+    if keys_only:
+        query.keys_only()
+    return list(query.fetch())
 
 
 class TestUniqueConstraints(TestCase):
@@ -126,8 +113,8 @@ class TestUniqueConstraints(TestCase):
         """
         user_kwargs = {"username": "tonyt", "first_name": "Tony", "second_name": "Thorpe"}
 
-        user = TestUser.objects.create(**user_kwargs)
-        user_duplicate = TestUser.objects.create(**user_kwargs)
+        TestUser.objects.create(**user_kwargs)
+        TestUser.objects.create(**user_kwargs)
 
         self.assertEqual(TestUser.objects.count(), 2)
 
@@ -139,14 +126,14 @@ class TestUniqueConstraints(TestCase):
     @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
     def test_insert_with_model_settings_precident(self):
         """
-        Assert that despite unique constraints being disabled globally, 
+        Assert that despite unique constraints being disabled globally,
         on a per model basis it can be enabled.
         """
         # so for the model without the explicit model level setting,
         # unique constraints are not applied due to the global flag
         user_kwargs = {"username": "tonythorpe", "first_name": "Tony", "second_name": "Thorpe"}
-        user = TestUser.objects.create(**user_kwargs)
-        user_two = TestUser.objects.create(**user_kwargs)
+        TestUser.objects.create(**user_kwargs)
+        TestUser.objects.create(**user_kwargs)
 
         self.assertEqual(TestUser.objects.count(), 2)
 
@@ -173,7 +160,7 @@ class TestUniqueConstraints(TestCase):
             "gcloudc.db.backends.datastore.constraints.unique_identifiers_from_entity", TransactionFailedError
         ):
             with self.assertRaises(TransactionFailedError):
-                user = TestUser.objects.create(username="mattyh", first_name="Matt", second_name="Hill")
+                TestUser.objects.create(username="mattyh", first_name="Matt", second_name="Hill")
 
         # there should be no user object...
         self.assertEqual(TestUser.objects.count(), 0)
@@ -192,7 +179,7 @@ class TestUniqueConstraints(TestCase):
         user = TestUserTwo.objects.create(username="mattyh")
 
         # delete the entity using the raw API to avoid removing the marker
-        client = _init_datastore_client()
+        client = _get_client()
         key = client.key(TestUserTwo._meta.db_table, user.pk)
         client.delete(key)
 
@@ -238,7 +225,7 @@ class TestUniqueConstraints(TestCase):
             self.assertIn(_format_value_for_identifier(user.username), marker.key.name)
 
     def test_update_with_constraint_conflict(self):
-        user = TestUserTwo.objects.create(username="AshtonGateEight")
+        TestUserTwo.objects.create(username="AshtonGateEight")
         user_two = TestUserTwo.objects.create(username="AshtonGateSeven")
 
         unique_markers = get_kind_query("uniquemarker", keys_only=True)
@@ -280,8 +267,8 @@ class TestUniqueConstraints(TestCase):
         """
         Assert that updates via the QuerySet API handle uniques.
         """
-        user = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
-        use_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
+        TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
+        TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
         unique_markers = get_kind_query("uniquemarker", keys_only=True)
         self.assertEqual(len(unique_markers), 4)
 
@@ -319,8 +306,8 @@ class TestUniqueConstraints(TestCase):
         entities, based on a combination of the unique markers per model
         and transaction limit of touching 500 entities.
         """
-        user = TestUserTwo.objects.create(username="Mickey Bell")
-        user_two = TestUserTwo.objects.create(username="Tony Thorpe")
+        TestUserTwo.objects.create(username="Mickey Bell")
+        TestUserTwo.objects.create(username="Tony Thorpe")
 
         with sleuth.switch("gcloudc.db.backends.datastore.transaction.TRANSACTION_ENTITY_LIMIT", 1):
             with self.assertRaises(Exception):
