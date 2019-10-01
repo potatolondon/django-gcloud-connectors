@@ -16,7 +16,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install --user tox
+        pip3 install --user tox
     - name: Test with manage.py test
       run: |
         tox
