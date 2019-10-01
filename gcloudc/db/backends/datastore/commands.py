@@ -648,12 +648,9 @@ def reserve_id(connection, kind, id_or_name, namespace):
         # Nothing to do if the ID is a string, no-need to reserve that
         return
 
-    # https://github.com/googleapis/google-cloud-python/issues/7111
     gclient = connection.connection.gclient
-    reserve_ids = gclient._datastore_api
-    reserve_ids(
-        project=gclient.project,
-        keys=[gclient.key(kind, id_or_name, namespace=namespace).to_protobuf()]
+    gclient.reserve_ids(
+        gclient.key(kind, id_or_name, namespace=namespace), 1
     )
 
 
@@ -789,14 +786,14 @@ class InsertCommand(object):
 
                     # if we're doing a bulk insert, due to the isolation of the
                     # datastore inside transactions we won't find duplicate unique
-                    # marker keys created as part of the bulk operation - 
+                    # marker keys created as part of the bulk operation -
                     # to avoid this we can do an in memory comparison on the
                     # marker keys we would be trying to fetch / compare
                     if len(entities) > 1:
                         check_unique_markers_in_memory(self.model, entities)
 
                     # even for bulk insert we also need to do the full check, to
-                    # query against unique markers created before the operation 
+                    # query against unique markers created before the operation
                     for entity, _ in entities:
                         new_marker_keys.extend(
                             # this is executed as an independent transaction
@@ -811,11 +808,11 @@ class InsertCommand(object):
                 # There are 3 possible reasons why we've ended up here:
                 # 1. The put() failed, but because it's a transaction, the
                 #    exception isn't raised until the END of the transaction block.
-                # 2. Some of the markers were acquired, but then we hit a unique 
+                # 2. Some of the markers were acquired, but then we hit a unique
                 #    constraint conflict which raised an inner exception, and so
                 #    the outer transaction was rolled back.
                 # 3. Something else went wrong...!
-                # In any of these cases, we (may) have acquired markers via 
+                # In any of these cases, we (may) have acquired markers via
                 # nested, independent transaction(s), and so we need to release
                 # them to mimic the behaviour of a single atomic block
                 delete_unique_markers(new_marker_keys, self.connection)
