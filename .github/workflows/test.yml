@@ -15,13 +15,13 @@ jobs:
         python-version: 3.7
     - uses: wei/wget@v1
       with:
-        args: -P $HOME https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
+        args: -P $HOME/work https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
     - name: Install dependencies
       run: |
         pwd
         ls -la 
         python -m pip install --upgrade pip
-        cd $HOME
+        cd $HOME/work
         pwd
         ls -la
         tar -xzvf google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
