@@ -15,11 +15,23 @@ jobs:
         python-version: 3.7
     - name: Install dependencies
       run: |
+        apt-get install wget
         python -m pip install --upgrade pip
+        cd $HOME
+        wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz | tar -xzvf
+        CLOUDSDK_CORE_DISABLE_PROMPTS=1
+        ./google-cloud-sdk/install.sh
+        ./google-cloud-sdk/bin/gcloud components install beta cloud-datastore-emulator core
+    - name: Check environment
+      run: |
         python --version
-        which pip
+        echo pip:
+        which pip               
+        echo pip3:
         which pip3
+        echo python:
         which python
+        echo python3:
         which python3
     - name: Test with manage.py test
       run: |
