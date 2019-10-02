@@ -1,5 +1,7 @@
+import pickle
 from datetime import timedelta
 
+from django import forms
 from django.core.exceptions import ValidationError
 from django.db import (
     connection,
@@ -17,6 +19,11 @@ from gcloudc.db.models.fields.computed import (
     ComputedPositiveIntegerField,
     ComputedTextField,
 )
+
+from gcloudc.db.models.fields.iterable import SetField, ListField
+from gcloudc.db.models.fields.related import RelatedSetField, RelatedListField, GenericRelationField
+from gcloudc.db.models.fields.json import JSONField
+
 from google.cloud import datastore
 
 from . import TestCase
@@ -24,6 +31,11 @@ from .models import (
     BasicTestModel,
     BinaryFieldModel,
     ModelWithCharField,
+    PFAwards,
+    PFAuthor,
+    PFPost,
+    ISOther,
+    ISStringReferenceModel,
 )
 
 
@@ -143,12 +155,12 @@ class RelatedFieldPrefetchTests(TestCase):
     def test_prefetch_related(self):
         award = PFAwards.objects.create(name="award")
         author = PFAuthor.objects.create(awards={award})
-        post = PFPost.objects.create(authors={author})
+        PFPost.objects.create(authors={author})
 
         posts = list(PFPost.objects.all().prefetch_related("authors__awards"))
 
         with self.assertNumQueries(0):
-            awards = list(posts[0].authors.all()[0].awards.all())
+            list(posts[0].authors.all()[0].awards.all())
 
 
 class PickleTests(TestCase):
@@ -169,7 +181,7 @@ class PickleTests(TestCase):
         ]
 
         fields.extend(
-            [RelatedListField(ModelWithCharField), RelatedSetField(ModelWithCharField), ShardedCounterField()]
+            [RelatedListField(ModelWithCharField), RelatedSetField(ModelWithCharField)]
         )
 
         for field in fields:

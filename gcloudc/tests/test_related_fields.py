@@ -1,103 +1,34 @@
-from . import TestCase
 import sleuth
-
 from django import forms
 from django.core import serializers
-from django.core.exceptions import ImproperlyConfigured
-from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.exceptions import (
+    ImproperlyConfigured,
+    ValidationError,
+)
 from django.db.utils import IntegrityError
-from gcloudc.db.models.fields.related import RelatedListField, RelatedSetField, GenericRelationField
-from gcloudc.db.models.fields.charfields import CharField
-from gcloudc.db.models.fields.iterable import ListField, SetField
+from gcloudc.db.models.fields.related import (
+    RelatedListField,
+    RelatedSetField,
+)
 
-
-class ISOther(models.Model):
-    name = models.CharField(max_length=500)
-
-    def __str__(self):
-        return "%s:%s" % (self.pk, self.name)
-
-    class Meta:
-        app_label = "gcloudc"
-
-
-class RelationWithoutReverse(models.Model):
-    name = models.CharField(max_length=500)
-
-    class Meta:
-        app_label = "gcloudc"
-
-
-class ISModel(models.Model):
-    related_things = RelatedSetField(ISOther)
-    related_list = RelatedListField(ISOther, related_name="ismodel_list")
-    limted_related = RelatedSetField(RelationWithoutReverse, limit_choices_to={"name": "banana"}, related_name="+")
-    children = RelatedSetField("self", related_name="+")
-
-    class Meta:
-        app_label = "gcloudc"
-
-
-class GenericRelationModel(models.Model):
-    relation_to_anything = GenericRelationField(null=True)
-    unique_relation_to_anything = GenericRelationField(null=True, unique=True)
-
-    class Meta:
-        app_label = "gcloudc"
-
-
-class IterableFieldsWithValidatorsModel(models.Model):
-    set_field = SetField(models.CharField(max_length=100), min_length=2, max_length=3, blank=False)
-    list_field = ListField(models.CharField(max_length=100), min_length=2, max_length=3, blank=False)
-    related_set = RelatedSetField(ISOther, min_length=2, max_length=3, blank=False)
-    related_list = RelatedListField(ISOther, related_name="iterable_list", min_length=2, max_length=3, blank=False)
-
-
-class ModelDatabaseA(models.Model):
-    set_of_bs = RelatedSetField("ModelDatabaseB", related_name="+")
-    list_of_bs = RelatedListField("ModelDatabaseB", related_name="+")
-
-
-class ModelDatabaseB(models.Model):
-    test_database = "ns1"
-
-
-class IterableRelatedModel(models.Model):
-    related_set = RelatedListField(ISOther, related_name="+")
-    related_list = RelatedListField(ISOther, related_name="+")
-
-
-class RelationWithOverriddenDbTable(models.Model):
-    class Meta:
-        db_table = "bananarama"
-
-
-class Post(models.Model):
-    content = models.TextField()
-    tags = RelatedSetField("Tag", related_name="posts")
-    ordered_tags = RelatedListField("Tag")
-
-
-class Tag(models.Model):
-    name = models.CharField(max_length=64)
-
-
-class RelatedCharFieldModel(models.Model):
-    char_field = CharField(max_length=500)
-
-
-class StringPkModel(models.Model):
-    name = models.CharField(max_length=500, primary_key=True)
-
-
-class IterableRelatedWithNonIntPkModel(models.Model):
-    related_set = RelatedListField(StringPkModel, related_name="+")
-    related_list = RelatedListField(StringPkModel, related_name="+")
-
-
-class RelatedListFieldRemoveDuplicatesModel(models.Model):
-    related_list_field = RelatedListField(RelatedCharFieldModel, remove_duplicates=True)
+from . import TestCase
+from .models import (
+    ISModel,
+    ISOther,
+    IterableFieldsWithValidatorsModel,
+    IterableRelatedModel,
+    IterableRelatedWithNonIntPkModel,
+    ModelDatabaseA,
+    ModelDatabaseB,
+    RelatedListFieldRemoveDuplicatesModel,
+    StringPkModel,
+    RelatedCharFieldModel,
+    Tag,
+    GenericRelationModel,
+    Post,
+    RelationWithoutReverse,
+    RelationWithOverriddenDbTable,
+)
 
 
 class RelatedListFieldRemoveDuplicatesForm(forms.ModelForm):
@@ -281,7 +212,7 @@ class RelatedListFieldModelTests(TestCase):
         thing = ISModel.objects.create(related_list_ids=[a.pk, b.pk])
 
         with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.QueryByKeys.__init__") as get:
-            ret = thing.related_list.all()[0]
+            thing.related_list.all()[0]
 
             self.assertEqual(1, get.call_count)
             self.assertEqual(1, len(get.calls[0].args[2]))
