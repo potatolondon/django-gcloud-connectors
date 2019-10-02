@@ -24,7 +24,7 @@ jobs:
         echo "Home is:"
         pwd
         ls -la
-        tar -xzvf google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
+        tar -xzvf /home/runner/work/_temp/_github_home/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
         CLOUDSDK_CORE_DISABLE_PROMPTS=1
         ./google-cloud-sdk/install.sh
         ./google-cloud-sdk/bin/gcloud components install beta cloud-datastore-emulator core
