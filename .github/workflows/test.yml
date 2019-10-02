@@ -16,11 +16,14 @@ jobs:
     - uses: actions/gcloud/cli@master
       with:
         args: components install beta cloud-datastore-emulator core
+    - uses: wei/wget@v1
+      with:
+        args: https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-#        cd $HOME
-#        wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz | tar -xzvf
+        cd $HOME
+        tar -xzvf google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
 #        CLOUDSDK_CORE_DISABLE_PROMPTS=1
 #        ./google-cloud-sdk/install.sh
 #        ./google-cloud-sdk/bin/gcloud components install beta cloud-datastore-emulator core
