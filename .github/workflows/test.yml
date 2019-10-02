@@ -22,6 +22,8 @@ jobs:
         ls -la 
         python -m pip install --upgrade pip
         cd $HOME
+        pwd
+        ls -la
         tar -xzvf google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
         CLOUDSDK_CORE_DISABLE_PROMPTS=1
         ./google-cloud-sdk/install.sh
