@@ -18,10 +18,10 @@ jobs:
         args: -P $HOME https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
     - name: Install dependencies
       run: |
-        pwd
-        ls -la 
+        find / -name google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
         python -m pip install --upgrade pip
-        cd $HOME/work
+        cd $HOME
+        echo "Home is:"
         pwd
         ls -la
         tar -xzvf google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
