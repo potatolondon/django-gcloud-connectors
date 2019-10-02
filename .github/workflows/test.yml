@@ -21,10 +21,8 @@ jobs:
         find $HOME -name google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
         python -m pip install --upgrade pip
         cd $HOME
-        echo "Home is:"
-        pwd
-        ls -la
-        tar -xzvf /home/runner/work/_temp/_github_home/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
+        echo \$HOME is: $HOME
+        tar -xzf /home/runner/work/_temp/_github_home/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
         CLOUDSDK_CORE_DISABLE_PROMPTS=1
         ./google-cloud-sdk/install.sh
         ./google-cloud-sdk/bin/gcloud components install beta cloud-datastore-emulator core
@@ -41,5 +39,5 @@ jobs:
         which python3
     - name: Test with manage.py test
       run: |
-        pip3 install tox
+        pip install tox
         tox
