@@ -13,15 +13,18 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: 3.7
+    - name: Prepare for dependency installation
+      run: |
+        mkdir $HOME/tmp/
     - uses: wei/wget@v1
       with:
-        args: -P $HOME/work https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
+        args: -P $HOME/tmp/ https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
     - name: Install dependencies
       run: |
         pwd
         ls -la 
         python -m pip install --upgrade pip
-        cd $HOME/work
+        cd $HOME/tmp/
         pwd
         ls -la
         tar -xzvf google-cloud-sdk-265.0.0-linux-x86_64.tar.gz
