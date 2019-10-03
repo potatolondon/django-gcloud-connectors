@@ -399,14 +399,14 @@ def entity_matches_query(entity, query):
             if ent_attr == "__key__":
                 continue
 
-            op = OPERATORS[op]  # We want this to throw if there's some op we don't know about
+            compare = OPERATORS[op]  # We want this to throw if there's some op we don't know about
 
             if ent_attr == "__kind__":
-                ent_attr = entity.kind
+                ent_value = entity.kind
                 query_value = query.kind
             else:
-                ent_attr = entity.get(ent_attr)
                 query_value = get_filter(query, (ent_attr, op))
+                ent_value = entity.get(ent_attr)
 
             if not isinstance(query_value, (list, tuple)):
                 query_values = [query_value]
@@ -414,13 +414,13 @@ def entity_matches_query(entity, query):
                 # The query value can be a list of ANDed values
                 query_values = query_value
 
-            if not isinstance(ent_attr, (list, tuple)):
-                ent_attr = [ent_attr]
+            if not isinstance(ent_value, (list, tuple)):
+                ent_value = [ent_value]
 
             matches = False
             for value in query_values:  # [22, 23]
                 # If any of the values don't match then this query doesn't match
-                if not any(op(attr, value) for attr in ent_attr):
+                if not any(compare(attr, value) for attr in ent_value):
                     matches = False
                     break
             else:
