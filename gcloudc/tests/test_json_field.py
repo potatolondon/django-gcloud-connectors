@@ -1,12 +1,14 @@
-from . import TestCase
-
 from collections import OrderedDict
+
 from django.conf import settings
-from django.db import models
-
+from django.db import (
+    connection,
+    models,
+)
 from gcloudc.db.models.fields.json import JSONField
-
 from google.cloud.datastore.entity import Entity
+
+from . import TestCase
 
 
 class JSONFieldModel(models.Model):
@@ -28,11 +30,14 @@ class JSONFieldModelTests(TestCase):
             of Django when (for example) you load a NULL from the database into a field that is
             non-nullable. The field value will still be None when read.
         """
+        bool(JSONFieldModel.objects.exists())  # Force a connection (Django might not have made one yet)
+
+        client = connection.connection.gclient
         entity = Entity(
-            JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"].get("NAMESPACE", "")
+            client.key(JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"].get("NAMESPACE", ""))
         )
         entity["json_field"] = "bananas"
-        entity.put()
+        client.put(entity)
 
         instance = JSONFieldModel.objects.get(pk=1)
         self.assertEqual(instance.json_field, "bananas")
