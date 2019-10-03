@@ -34,7 +34,7 @@ class JSONFieldModelTests(TestCase):
 
         client = connection.connection.gclient
         entity = Entity(
-            client.key(JSONFieldModel._meta.db_table, id=1, namespace=settings.DATABASES["default"].get("NAMESPACE", ""))
+            client.key(JSONFieldModel._meta.db_table, 1, namespace=connection.settings_dict["NAMESPACE"])
         )
         entity["json_field"] = "bananas"
         client.put(entity)
