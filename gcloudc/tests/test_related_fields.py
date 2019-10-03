@@ -215,7 +215,7 @@ class RelatedListFieldModelTests(TestCase):
             thing.related_list.all()[0]
 
             self.assertEqual(1, get.call_count)
-            self.assertEqual(1, len(get.calls[0].args[2]))
+            self.assertEqual(1, len(get.calls[0].args[3]))
 
     def test_can_update_related_field_from_form(self):
         related = ISOther.objects.create()
