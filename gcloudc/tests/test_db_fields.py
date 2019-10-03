@@ -24,8 +24,6 @@ from gcloudc.db.models.fields.iterable import SetField, ListField
 from gcloudc.db.models.fields.related import RelatedSetField, RelatedListField, GenericRelationField
 from gcloudc.db.models.fields.json import JSONField
 
-from google.cloud import datastore
-
 from . import TestCase
 from .models import (
     BasicTestModel,
@@ -296,16 +294,16 @@ class ModelWithNonNullableFieldAndDefaultValueTests(TestCase):
     def _create_instance_with_null_field_value(self):
 
         instance = ModelWithNonNullableFieldAndDefaultValue.objects.create(some_field=1)
-
-        entity = datastore.Get(
-            datastore.Key.from_path(
+        client = connection.connection.gclient
+        entity = client.get(
+            client.key(
                 ModelWithNonNullableFieldAndDefaultValue._meta.db_table,
                 instance.pk,
-                namespace=connection.settings_dict["NAMESPACE"],
+                namespace=connection.settings_dict.get("NAMESPACE", ""),
             )
         )
         del entity["some_field"]
-        datastore.Put(entity)
+        client.put(entity)
 
         instance.refresh_from_db()
 
