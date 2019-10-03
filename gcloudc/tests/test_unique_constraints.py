@@ -51,7 +51,10 @@ class TestUniqueConstraints(TestCase):
         unique_markers = get_kind_query("uniquemarker", keys_only=False)
         self.assertEqual(len(unique_markers), 2)
         for marker in unique_markers:
-            key = Key(TestUser._meta.db_table, user.pk, project="test")
+            key = Key(
+                TestUser._meta.db_table, user.pk, project="test",
+                namespace=connection.settings_dict["NAMESPACE"]
+            )
             self.assertEqual(marker["instance"], key)
 
     def test_bulk_insert(self):
@@ -102,7 +105,10 @@ class TestUniqueConstraints(TestCase):
         self.assertEqual(len(unique_markers), 1)
 
         # the previous unique markers should have remained
-        key = Key(TestUserTwo._meta.db_table, user.pk, project="test")
+        key = Key(
+            TestUserTwo._meta.db_table, user.pk, project="test",
+            namespace=connection.settings_dict["NAMESPACE"]
+        )
         self.assertEqual(unique_markers[0]["instance"], key)
 
     @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
@@ -147,7 +153,10 @@ class TestUniqueConstraints(TestCase):
         unique_markers = get_kind_query("uniquemarker", keys_only=False)
         self.assertEqual(len(unique_markers), 1)
         for marker in unique_markers:
-            key = Key(TestUserTwo._meta.db_table, user_three.pk, project="test")
+            key = Key(
+                TestUserTwo._meta.db_table, user_three.pk, project="test",
+                namespace=connection.settings_dict["NAMESPACE"]
+            )
             self.assertEqual(marker["instance"], key)
 
     def test_if_marker_put_fails(self):
@@ -180,7 +189,10 @@ class TestUniqueConstraints(TestCase):
 
         # delete the entity using the raw API to avoid removing the marker
         client = _get_client()
-        key = client.key(TestUserTwo._meta.db_table, user.pk)
+        key = client.key(
+            TestUserTwo._meta.db_table, user.pk,
+            namespace=connection.settings_dict["NAMESPACE"]
+        )
         client.delete(key)
 
         # the markers will still be there
@@ -191,7 +203,10 @@ class TestUniqueConstraints(TestCase):
 
         # the markers should ref the new entity
         unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        key = Key(TestUserTwo._meta.db_table, new_user.pk, project="test")
+        key = Key(
+            TestUserTwo._meta.db_table, new_user.pk, project="test",
+            namespace=connection.settings_dict["NAMESPACE"]
+        )
         self.assertEqual(unique_markers[0]["instance"], key)
 
     def test_update_updates_markers(self):
@@ -206,7 +221,10 @@ class TestUniqueConstraints(TestCase):
         self.assertEqual(len(unique_markers), 1)
         for marker in unique_markers:
             # refs the right entity
-            key = Key(TestUserTwo._meta.db_table, user.pk, project="test")
+            key = Key(
+                TestUserTwo._meta.db_table, user.pk, project="test",
+                namespace=connection.settings_dict["NAMESPACE"]
+            )
             self.assertEqual(marker["instance"], key)
             # the named key should ref the unique username value
             self.assertIn(_format_value_for_identifier(user.username), marker.key.name)
@@ -219,7 +237,10 @@ class TestUniqueConstraints(TestCase):
         self.assertEqual(len(unique_markers), 1)
         for marker in unique_markers:
             # refs the right entity
-            key = Key(TestUserTwo._meta.db_table, user.pk, project="test")
+            key = Key(
+                TestUserTwo._meta.db_table, user.pk, project="test",
+                namespace=connection.settings_dict["NAMESPACE"]
+            )
             self.assertEqual(marker["instance"], key)
             # the named key should ref the new unique value
             self.assertIn(_format_value_for_identifier(user.username), marker.key.name)

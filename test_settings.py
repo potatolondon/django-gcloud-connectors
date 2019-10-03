@@ -12,7 +12,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'gcloudc.db.backends.datastore',
         'INDEXES_FILE': os.path.join(os.path.abspath(os.path.dirname(__file__)), "djangaeidx.yaml"),
-        "PROJECT": "test"
+        "PROJECT": "test",
+        "NAMESPACE": "ns1",  # Use a non-default namespace to catch edge cases where we forget
     }
 }
 
