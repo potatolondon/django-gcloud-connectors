@@ -94,7 +94,7 @@ def get_prepared_db_value(connection, instance, field, raw=False):
     value = getattr(instance, field.attname) if raw else field.pre_save(instance, instance._state.adding)
 
     if isinstance(value, BaseExpression):
-        from djangae.db.backends.appengine.expressions import evaluate_expression
+        from gcloudc.db.backends.datastore.expressions import evaluate_expression
 
         # We can't actually support F expressions on the datastore, but we can simulate
         # them, evaluating the expression in place.

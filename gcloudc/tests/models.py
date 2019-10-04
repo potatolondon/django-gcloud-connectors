@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.core.validators import EmailValidator
 from gcloudc.db.models.fields.charfields import (
@@ -27,7 +28,9 @@ class TestUser(models.Model):
     email = models.EmailField(blank=True, default="")
     field2 = models.CharField(max_length=32, blank=True, default="")
 
-    def __unicode__(self):
+    last_login = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
         return self.username
 
     class Meta:
@@ -166,7 +169,7 @@ class TestFruit(models.Model):
     class Meta:
         ordering = ("color",)
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
     def __repr__(self):
@@ -191,3 +194,80 @@ class Relation(models.Model):
 class Related(models.Model):
     headline = models.CharField(max_length=500)
     relation = models.ForeignKey(Relation, on_delete=models.DO_NOTHING)
+
+
+class IntegerModel(models.Model):
+    integer_field = models.IntegerField()
+
+
+class NullDate(models.Model):
+    date = models.DateField(null=True, default=None)
+    datetime = models.DateTimeField(null=True, default=None)
+    time = models.TimeField(null=True, default=None)
+
+
+class NullDateSet(models.Model):
+    dates = RelatedSetField(NullDate, blank=True, unique=True)
+
+
+class UniqueModel(models.Model):
+    unique_field = models.CharField(max_length=100, unique=True)
+    unique_combo_one = models.IntegerField(blank=True, default=0)
+    unique_combo_two = models.CharField(max_length=100, blank=True, default="")
+
+    unique_relation = models.ForeignKey('self', null=True, blank=True, unique=True, on_delete=models.DO_NOTHING)
+
+    unique_set_field = SetField(models.CharField(max_length=500), unique=True)
+    unique_list_field = ListField(models.CharField(max_length=500), unique=True)
+
+    unique_together_list_field = ListField(models.IntegerField())
+
+    class Meta:
+        unique_together = [
+            ("unique_combo_one", "unique_combo_two"),
+            ("unique_together_list_field", "unique_combo_one")
+        ]
+
+
+class ModelWithNullableCharField(models.Model):
+    field1 = models.CharField(max_length=500, null=True)
+    some_id = models.IntegerField(default=0)
+
+
+class DurationModel(models.Model):
+    duration_field = models.DurationField()
+    duration_field_nullable = models.DurationField(blank=True, null=True)
+
+
+class ModelWithUniques(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+
+
+class UniqueModelWithLongPK(models.Model):
+    long_pk = models.CharField(max_length=500, primary_key=True)
+    unique_field = models.IntegerField(unique=True)
+
+
+class Zoo(models.Model):
+    pass
+
+
+class Enclosure(models.Model):
+    zoo = models.ForeignKey(Zoo, on_delete=models.DO_NOTHING)
+
+
+class Animal(models.Model):
+    enclosure = models.ForeignKey(Enclosure, on_delete=models.DO_NOTHING)
+
+
+class UUIDTestModel(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4)
+
+
+class SpecialIndexesModel(models.Model):
+    name = models.CharField(max_length=255, primary_key=True)
+    nickname = CharField(blank=True)
+    sample_list = ListField(models.CharField)
+
+    def __str__(self):
+        return self.name

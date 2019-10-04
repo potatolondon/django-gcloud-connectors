@@ -122,7 +122,7 @@ class WhereNode(object):
         if special_indexer:
             if is_pk_field:
                 column = model._meta.pk.column
-                value = unicode(value.id_or_name())
+                value = six.text_type(value.id_or_name)
 
             add_special_index(connections[self.using], target_field.model, column, special_indexer, operator, value)
             index_type = special_indexer.prepare_index_type(operator, value)

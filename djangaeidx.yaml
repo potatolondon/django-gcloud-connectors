@@ -1,3 +1,26 @@
 tests_related:
   headline:
   - startswith
+tests_specialindexesmodel:
+  name:
+  - contains
+  - endswith
+  - iexact
+  - icontains
+  - iendswith
+  - startswith
+  - istartswith
+  nickname:
+  - contains
+  sample_list:
+  - item__contains
+  - item__endswith
+  - item__startswith
+  - item__icontains
+  - item__iendswith
+  - item__istartswith
+tests_testuser:
+  username:
+  - iexact
+  - contains
+  - startswith

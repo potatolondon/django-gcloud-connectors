@@ -174,8 +174,6 @@ def write_special_indexes(connection):
 def add_special_index(connection, model_class, field_name, indexer, operator, value=None):
     global _project_special_indexes
 
-    from django.conf import settings
-
     index_type = indexer.prepare_index_type(operator, value)
 
     field_name = str(field_name)  # Make sure we are working with strings
@@ -378,7 +376,7 @@ class IExactIndexer(StringIndexerMixin, Indexer):
         if value is None:
             return None
 
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             value = str(value)
         return value.lower()
 
@@ -402,7 +400,7 @@ class HourIndexer(TimeIndexerMixin, Indexer):
         return None
 
     def prep_value_for_query(self, value, **kwargs):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return value
 
         if isinstance(value, six.string_types):
@@ -425,7 +423,7 @@ class MinuteIndexer(TimeIndexerMixin, Indexer):
         return None
 
     def prep_value_for_query(self, value, **kwargs):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return value
 
         if isinstance(value, six.string_types):
@@ -448,7 +446,7 @@ class SecondIndexer(TimeIndexerMixin, Indexer):
         return None
 
     def prep_value_for_query(self, value, **kwargs):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return value
 
         if isinstance(value, six.string_types):
@@ -471,7 +469,7 @@ class DayIndexer(DateIndexerMixin, Indexer):
         return None
 
     def prep_value_for_query(self, value, **kwargs):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return value
 
         if isinstance(value, six.string_types):
@@ -494,7 +492,7 @@ class YearIndexer(DateIndexerMixin, Indexer):
         return None
 
     def prep_value_for_query(self, value, **kwargs):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return value
 
         if isinstance(value, six.string_types):
@@ -518,7 +516,7 @@ class MonthIndexer(DateIndexerMixin, Indexer):
         return None
 
     def prep_value_for_query(self, value, **kwargs):
-        if isinstance(value, (int, long)):
+        if isinstance(value, int):
             return value
 
         if isinstance(value, six.string_types):
@@ -576,7 +574,7 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
         # a.) A descendent
         # b.) Have a key name of whatever OPERATOR is
 
-        qry = Query(keys_only=True, namespace=datastore_key.namespace())
+        qry = Query(keys_only=True, namespace=datastore_key.namespace)
         qry = qry.Ancestor(datastore_key)
 
         # Delete all the entities matching the ancestor query
@@ -708,7 +706,7 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
             else:
                 # `value` is a string. Generate a list of all its substrings.
                 length = len(value)
-                lists = [value[i : j + 1] for i in range(length) for j in range(i, length)]
+                lists = [value[i:j + 1] for i in range(length) for j in range(i, length)]
                 results.extend(lists)
 
         if not results:
@@ -720,7 +718,7 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
         if hasattr(value, "isoformat"):
             value = value.isoformat()
         else:
-            value = unicode(value)
+            value = str(value)
         value = self.unescape(value)
 
         if STRIP_PERCENTS:
@@ -935,7 +933,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
                 if any([bool(re.search(pattern, x, flags)) for x in value]):
                     return True
             else:
-                if isinstance(value, (int, long)):
+                if isinstance(value, int):
                     value = str(value)
 
                 return bool(re.search(pattern, value, flags))
