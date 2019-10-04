@@ -24,7 +24,7 @@ class TestUser(models.Model):
     username = models.CharField(max_length=32, unique=True)
     first_name = models.CharField(max_length=50)
     second_name = models.CharField(max_length=50)
-
+    email = models.EmailField(blank=True, default="")
     field2 = models.CharField(max_length=32, blank=True, default="")
 
     def __unicode__(self):
@@ -171,3 +171,23 @@ class TestFruit(models.Model):
 
     def __repr__(self):
         return "<TestFruit: name={}, color={}>".format(self.name, self.color)
+
+
+class TransformTestModel(models.Model):
+    field1 = models.CharField(max_length=255)
+    field2 = models.CharField(max_length=255, unique=True)
+    field3 = models.CharField(null=True, max_length=255)
+    field4 = models.TextField()
+
+
+class InheritedModel(TransformTestModel):
+    pass
+
+
+class Relation(models.Model):
+    pass
+
+
+class Related(models.Model):
+    headline = models.CharField(max_length=500)
+    relation = models.ForeignKey(Relation, on_delete=models.DO_NOTHING)
