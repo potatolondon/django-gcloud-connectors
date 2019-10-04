@@ -25,6 +25,8 @@ class TestUser(models.Model):
     first_name = models.CharField(max_length=50)
     second_name = models.CharField(max_length=50)
 
+    field2 = models.CharField(max_length=32, blank=True, default="")
+
     def __unicode__(self):
         return self.username
 
@@ -151,3 +153,21 @@ class ISStringReferenceModel(models.Model):
     related_list = RelatedListField('ISOther', related_name="ismodel_list_string")
     limted_related = RelatedSetField('RelationWithoutReverse', limit_choices_to={'name': 'banana'}, related_name="+")
     children = RelatedSetField("self", related_name="+")
+
+
+class TestFruit(models.Model):
+    name = models.CharField(primary_key=True, max_length=32)
+    origin = models.CharField(max_length=32, default="Unknown")
+    color = models.CharField(max_length=100)
+    is_mouldy = models.BooleanField(default=False)
+    text_field = models.TextField(blank=True, default="")
+    binary_field = models.BinaryField(blank=True)
+
+    class Meta:
+        ordering = ("color",)
+
+    def __unicode__(self):
+        return self.name
+
+    def __repr__(self):
+        return "<TestFruit: name={}, color={}>".format(self.name, self.color)

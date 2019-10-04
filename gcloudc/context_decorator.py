@@ -21,7 +21,7 @@ class ContextDecorator(object):
         any arguments passed into the decorator or context manager when called.
     """
 
-    VALID_ARGUMENTS = ()
+    VALID_ARGUMENTS = tuple()
 
     def __init__(self, func=None, **kwargs):
         # Func will be passed in if this has been called without parenthesis

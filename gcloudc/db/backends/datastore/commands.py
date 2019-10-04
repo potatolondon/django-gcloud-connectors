@@ -652,23 +652,27 @@ class InsertCommand(object):
 
         def perform_insert(entities):
             results = []
+            rpc = transaction._rpc(self.connection.alias)
+
             for primary, descendents in entities:
                 if primary.key.is_partial:
-                    primary.key = primary.key.completed_key(transaction._rpc(self.connection)._generate_id())
+                    primary.key = primary.key.completed_key(
+                        rpc._generate_id()
+                    )
 
-                transaction._rpc(self.connection).put(primary)
+                rpc.put(primary)
                 new_key = primary.key
 
                 if descendents:
                     for i, descendent in enumerate(descendents):
-                        key = transaction._rpc(self.connection).key(
+                        key = rpc.key(
                             descendent.kind, descendent.key.id_or_name, parent=new_key, namespace=new_key.namespace
                         )
                         descendents[i] = Entity(key)
                         descendents[i].update(descendent)
 
                     for descendent in descendents:
-                        transaction._rpc(self.connection).put(descendent)
+                        rpc.put(descendent)
 
                 results.append(new_key)
             return results
@@ -686,7 +690,7 @@ class InsertCommand(object):
 
                     # sanity check the key isn't already taken
                     if check_existence and key is not None:
-                        if utils.key_exists(self.connection, key):
+                        if utils.key_exists(self.connection.alias, key):
                             raise IntegrityError("Tried to INSERT with existing key")
 
                         # quick validation of the ID value

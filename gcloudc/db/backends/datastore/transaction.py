@@ -4,20 +4,29 @@ import threading
 from django.db import connections
 from gcloudc import context_decorator
 from google.cloud import exceptions
-
+from google.cloud.datastore.transaction import Transaction as DatastoreTransaction
 
 TRANSACTION_ENTITY_LIMIT = 500
 
 
 def in_atomic_block(using="default"):
-    connection = connections[using].connection
-    return bool(connection.gclient.current_transaction)
+    txn = current_transaction()
+    if not txn:
+        return False
+
+    datastore_transaction = getattr(txn, "_datastore_transaction")
+    if not datastore_transaction:
+        return False
+
+    # Returns True if this is a Datastore transaction, and not a normal "Batch"
+    return isinstance(datastore_transaction, DatastoreTransaction)
 
 
 class Transaction(object):
     def __init__(self, connection, datastore_transaction=None):
         self._connection = connection
         self._datastore_transaction = datastore_transaction
+        self._seen_keys = set()
 
     def _generate_id(self):
         """
@@ -42,11 +51,18 @@ class Transaction(object):
     def get(self, key_or_keys, missing=None):
         # For some reason Datastore Transactions don't provide their
         # own get
-        if hasattr(key_or_keys, "__iter__"):
+        if hasattr(key_or_keys, "__iter__") and not isinstance(key_or_keys, str):
             getter = self._connection.gclient.get_multi
-            return getter(key_or_keys, missing=missing)
+            ret = getter(key_or_keys, missing=missing)
+            if ret:
+                [self._seen_keys.add(x.key) for x in ret]
+                return ret
         else:
-            return self._connection.gclient.get(key_or_keys)
+            ret = self._connection.gclient.get(key_or_keys)
+            if ret:
+                self._seen_keys.add(ret.key)
+
+        return ret
 
     def put(self, entity):
         putter = self._datastore_transaction.put if self._datastore_transaction else self._connection.gclient.put
@@ -54,6 +70,9 @@ class Transaction(object):
         putter(entity)
 
         assert entity.key
+
+        self._seen_keys.add(entity.key)
+
         return entity.key
 
     def delete(self, key_or_keys):
@@ -180,10 +199,10 @@ class NormalTransaction(Transaction):
 
 class NoTransaction(Transaction):
     def _enter(self):
-        raise NotImplementedError()
+        pass
 
     def _exit(self):
-        pass
+        self._datastore_transaction = None
 
 
 _STORAGE = threading.local()
@@ -204,6 +223,7 @@ def _rpc(using):
         def _exit(self):
             pass
 
+    assert(using)
     return current_transaction(using) or RootTransaction(connections[using].connection)
 
 
@@ -278,7 +298,15 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         enable_cache = decorator_args.get("enable_cache", True)
 
         new_transaction = None
-        connection = connections[using].connection
+
+        connection = connections[using]
+
+        # Connect if necessary (mainly in tests)
+        if not connection.connection:
+            connection.connect()
+
+        connection = connection.connection
+        assert(connection)
 
         if independent:
             new_transaction = IndependentTransaction(connection)
@@ -320,3 +348,31 @@ class AtomicDecorator(context_decorator.ContextDecorator):
 
 atomic = AtomicDecorator
 commit_on_success = AtomicDecorator  # Alias to the old Django name for this kinda thing
+
+
+class NonAtomicDecorator(AtomicDecorator):
+    VALID_ARGUMENTS = ("using",)
+
+    @classmethod
+    def _do_enter(cls, state, decorator_args):
+        _init_storage()
+
+        using = decorator_args.get("using", "default")
+        connection = connections[using]
+
+        # Connect if necessary (mainly in tests)
+        if not connection.connection:
+            connection.connect()
+
+        connection = connection.connection
+        assert(connection)
+
+        # For non_atomic blocks we pass a Batch as the transaction
+        new_transaction = NoTransaction(connection.gclient.batch())
+
+        _STORAGE.transaction_stack.append(new_transaction)
+        _STORAGE.transaction_stack[-1].enter()
+        return current_transaction()
+
+
+non_atomic = NonAtomicDecorator

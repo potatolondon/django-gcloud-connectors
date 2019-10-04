@@ -12,19 +12,19 @@ from gcloudc.db.backends.datastore.base import Connection as DatastoreConnection
 
 class Atomic(ContextDecorator):
     # This should be the superset of any connector args (just Datastore for now)
-    VALID_ARGUMENTS = datastore_transaction.AtomicDecorator
+    VALID_ARGUMENTS = datastore_transaction.AtomicDecorator.VALID_ARGUMENTS[:]
 
     @classmethod
     def _do_enter(cls, state, decorator_args):
-        using = decorator_args.get("using", "default")
-        conn = connections[using]
+        using = decorator_args.get("using", "default") or "default"
 
-        if isinstance(conn, DatastoreConnection):
+        try:
+            connections[using]
             state.decorator = datastore_transaction.AtomicDecorator
-        else:
-            raise ValueError()
+        except (KeyError, TypeError):
+            raise ValueError("Unable to get connection for %s" % using)
 
-        state.decorator._do_enter(state, decorator_args)
+        return state.decorator._do_enter(state, decorator_args)
 
     @classmethod
     def _do_exit(cls, state, decorator_args, exception):
@@ -34,10 +34,31 @@ class Atomic(ContextDecorator):
 atomic = Atomic
 
 
-def in_atomic_block(using="default"):
-    conn = connections[using]
+class NonAtomic(ContextDecorator):
 
-    if isinstance(conn, DatastoreConnection):
+    @classmethod
+    def _do_enter(cls, state, decorator_args):
+        using = decorator_args.get("using", "default") or "default"
+
+        try:
+            connections[using]
+            state.decorator = datastore_transaction.NonAtomicDecorator
+        except (KeyError, TypeError):
+            raise ValueError("Unable to get connection for %s" % using)
+
+        return state.decorator._do_enter(state, decorator_args)
+
+    @classmethod
+    def _do_exit(cls, state, decorator_args, exception):
+        state.decorator._do_exit(state, decorator_args, exception)
+
+
+non_atomic = NonAtomic
+
+
+def in_atomic_block(using="default"):
+    try:
+        connections[using]
         return datastore_transaction.in_atomic_block(using=using)
-    else:
-        raise ValueError()
+    except (KeyError, TypeError):
+        raise ValueError("Unable to find connection with alias: %s" % using)
