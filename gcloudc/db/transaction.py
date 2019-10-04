@@ -7,7 +7,6 @@ from django.db import connections
 
 from gcloudc.context_decorator import ContextDecorator
 from gcloudc.db.backends.datastore import transaction as datastore_transaction
-from gcloudc.db.backends.datastore.base import Connection as DatastoreConnection
 
 
 class Atomic(ContextDecorator):

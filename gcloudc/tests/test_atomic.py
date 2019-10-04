@@ -92,25 +92,25 @@ class TransactionTests(TestCase):
         self.assertEqual(0, TestUser.objects.count())
 
     def test_non_atomic_context_manager(self):
-        existing = TestUser.objects.create(username="existing", field2="exists")
+        existing = TestUser.objects.create(username="existing", field2="exists", first_name="one", second_name="one")
 
         with transaction.atomic():
             self.assertTrue(transaction.in_atomic_block())
 
-            user = TestUser.objects.create(username="foo", field2="bar")
+            user = TestUser.objects.create(username="foo", field2="bar", first_name="two", second_name="two")
 
             with transaction.non_atomic():
                 # We're outside the transaction, so the user should not exist
                 self.assertRaises(TestUser.DoesNotExist, TestUser.objects.get, pk=user.pk)
                 self.assertFalse(transaction.in_atomic_block())
 
-                with sleuth.watch("google.appengine.api.datastore.Get") as datastore_get:
+                with sleuth.watch("google.cloud.datastore.client.Client.get") as datastore_get:
                     TestUser.objects.get(pk=existing.pk)  # Should hit the cache, not the datastore
 
                 self.assertFalse(datastore_get.called)
 
             with transaction.atomic(independent=True):
-                user2 = TestUser.objects.create(username="foo2", field2="bar2")
+                user2 = TestUser.objects.create(username="foo2", field2="bar2", first_name="three", second_name="three")
                 self.assertTrue(transaction.in_atomic_block())
 
                 with transaction.non_atomic():
@@ -121,7 +121,7 @@ class TransactionTests(TestCase):
                         self.assertFalse(transaction.in_atomic_block())
                         self.assertRaises(TestUser.DoesNotExist, TestUser.objects.get, pk=user2.pk)
 
-                        with sleuth.watch("google.appengine.api.datastore.Get") as datastore_get:
+                        with sleuth.watch("google.cloud.datastore.client.Client.get") as datastore_get:
                             # Should hit the cache, not the Datastore
                             TestUser.objects.get(pk=existing.pk)
 
