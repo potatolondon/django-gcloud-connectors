@@ -7,7 +7,6 @@ import random
 import re
 import uuid
 from hashlib import md5
-
 from string import ascii_letters as letters
 from unittest import skipIf
 
@@ -20,7 +19,6 @@ from django.core.exceptions import (
     FieldError,
     ValidationError,
 )
-
 from django.db import (
     DataError,
     IntegrityError,
@@ -40,35 +38,38 @@ from django.test.utils import override_settings
 from django.utils import six
 from django.utils.safestring import SafeText
 from django.utils.six.moves import range
+from gcloudc.db.backends.datastore.commands import FlushCommand
+from gcloudc.db.backends.datastore.indexing import (
+    IExactIndexer,
+    add_special_index,
+    get_indexer,
+)
 from gcloudc.db.backends.datastore.utils import (
     decimal_to_string,
     entity_matches_query,
     normalise_field_value,
 )
-
-from gcloudc.db.backends.datastore.indexing import add_special_index, IExactIndexer, get_indexer
-
 from gcloudc.db.decorators import disable_cache
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
 from . import TestCase
 from .models import (
+    Animal,
+    DurationModel,
+    Enclosure,
     IntegerModel,
     ModelWithNullableCharField,
+    ModelWithUniques,
     NullDate,
     NullDateSet,
+    SpecialIndexesModel,
     TestFruit,
     TestUser,
     UniqueModel,
-    DurationModel,
-    ModelWithUniques,
     UniqueModelWithLongPK,
-    Zoo,
-    Enclosure,
-    Animal,
     UUIDTestModel,
-    SpecialIndexesModel
+    Zoo,
 )
 
 DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPACE")
@@ -1536,7 +1537,7 @@ class EdgeCaseTests(TestCase):
             permission.save(force_insert=True)
 
     def test_values_list_on_pk_does_keys_only_query(self):
-        from google.appengine.api.datastore import Query
+        from google.cloud.datastore.query import Query
 
         def replacement_init(*args, **kwargs):
             replacement_init.called_args = args
@@ -1669,14 +1670,14 @@ class EdgeCaseTests(TestCase):
         obj = TestFruit.objects.create(name='pear')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
         for index in indexes:
-            add_special_index(TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
+            add_special_index(default_connection, TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
         obj.save()
 
     def test_special_indexes_for_unusually_long_values(self):
         obj = TestFruit.objects.create(name='pear', color='1234567890-=!@#$%^&*()_+qQWERwertyuiopasdfghjklzxcvbnm')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
         for index in indexes:
-            add_special_index(TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
+            add_special_index(default_connection, TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
         obj.save()
 
         qry = TestFruit.objects.filter(color__contains='1234567890-=!@#$%^&*()_+qQWERwertyuiopasdfghjklzxcvbnm')
@@ -1986,14 +1987,6 @@ class NamespaceTests(TestCase):
 
 def deferred_func():
     pass
-
-
-class TestHelperTests(TestCase):
-    def test_inconsistent_db(self):
-        with inconsistent_db():
-            fruit = TestFruit.objects.create(name="banana")
-            self.assertEqual(0, TestFruit.objects.count()) # Inconsistent query
-            self.assertEqual(1, TestFruit.objects.filter(pk=fruit.pk).count()) # Consistent query
 
 
 class CascadeDeletionTests(TestCase):

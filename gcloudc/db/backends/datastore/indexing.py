@@ -13,11 +13,12 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import six
+from gcloudc.core.validators import MaxBytesValidator
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
-from .utils import get_top_concrete_parent
 
 from . import transaction
+from .utils import get_top_concrete_parent
 
 logger = logging.getLogger(__name__)
 _project_special_indexes = {}
@@ -246,7 +247,7 @@ class Indexer(object):
     # when the database is flushed**
 
     @classmethod
-    def cleanup(cls, datastore_key):
+    def cleanup(cls, client, datastore_key):
         """
             Called when an instance is deleted, if the instances has an index
             which uses this indexer. This is mainly for cleaning up descendent kinds
@@ -567,18 +568,18 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
             return False
 
     @classmethod
-    def cleanup(cls, datastore_key):
+    def cleanup(cls, client, datastore_key):
 
         # Kindless query, we don't know the kinds because we don't know all the fields
         # that use contains. But, we do know that all the things we need to delete are:
         # a.) A descendent
         # b.) Have a key name of whatever OPERATOR is
 
-        qry = Query(keys_only=True, namespace=datastore_key.namespace)
-        qry = qry.Ancestor(datastore_key)
+        qry = client.query(namespace=datastore_key.namespace, ancestor=datastore_key)
+        qry.keys_only()
 
         # Delete all the entities matching the ancestor query
-        Delete([x for x in qry.Run() if x.name() == cls.OPERATOR])
+        client.delete([x.key for x in qry.fetch() if x.key.id_or_name == cls.OPERATOR])
 
     def _generate_kind_name(self, model, column):
         return "_djangae_idx_{}_{}".format(get_top_concrete_parent(model)._meta.db_table, column)
@@ -701,7 +702,7 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
                 # substrings of each string in `value`
                 for element in value:
                     length = len(element)
-                    lists = [element[i : j + 1] for i in range(length) for j in range(i, length)]
+                    lists = [element[i:j + 1] for i in range(length) for j in range(i, length)]
                     results.extend(lists)
             else:
                 # `value` is a string. Generate a list of all its substrings.

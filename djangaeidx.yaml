@@ -1,3 +1,6 @@
+tests_integermodel:
+  integer_field:
+  - iexact
 tests_related:
   headline:
   - startswith
@@ -19,7 +22,18 @@ tests_specialindexesmodel:
   - item__icontains
   - item__iendswith
   - item__istartswith
+tests_testfruit:
+  color:
+  - icontains
+  - contains
+  - iexact
+  - iendswith
+  - endswith
+  - istartswith
+  - startswith
 tests_testuser:
+  last_login:
+  - year__exact
   username:
   - iexact
   - contains

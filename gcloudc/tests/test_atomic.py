@@ -124,25 +124,16 @@ class TransactionTests(TestCase):
                         with sleuth.watch("google.cloud.datastore.client.Client.get") as datastore_get:
                             # Should hit the cache, not the Datastore
                             TestUser.objects.get(pk=existing.pk)
+                            self.assertFalse(datastore_get.called)
 
                     self.assertFalse(transaction.in_atomic_block())
                     self.assertRaises(TestUser.DoesNotExist, TestUser.objects.get, pk=user2.pk)
 
+                # Should hit the cache
                 self.assertTrue(TestUser.objects.filter(pk=user2.pk).exists())
                 self.assertTrue(transaction.in_atomic_block())
 
-    def test_xg_argument(self):
-        @transaction.atomic(xg=True)
-        def txn(_username):
-            TestUser.objects.create(username=_username, field2="bar")
-            TestFruit.objects.create(name="Apple", color="pink")
-            raise ValueError()
-
-        with self.assertRaises(ValueError):
-            txn("foo")
-
-        self.assertEqual(0, TestUser.objects.count())
-        self.assertEqual(0, TestFruit.objects.count())
+        self.assertFalse(transaction.in_atomic_block())
 
     def test_independent_argument(self):
         """
