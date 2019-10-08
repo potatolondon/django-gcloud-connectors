@@ -1,10 +1,13 @@
-import uuid
 import threading
+import uuid
+import copy
 
 from django.db import connections
 from gcloudc import context_decorator
+from gcloudc.db.backends.datastore import caching
 from google.cloud import exceptions
-from google.cloud.datastore.transaction import Transaction as DatastoreTransaction
+from google.cloud.datastore.transaction import \
+    Transaction as DatastoreTransaction
 
 TRANSACTION_ENTITY_LIMIT = 500
 
@@ -63,6 +66,10 @@ class Transaction(object):
                 self._seen_keys.add(ret.key)
 
         return ret
+
+    def put_multi(self, entities):
+        for entity in entities:
+            self.put(entity)
 
     def put(self, entity):
         putter = self._datastore_transaction.put if self._datastore_transaction else self._connection.gclient.put
@@ -322,6 +329,9 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         _STORAGE.transaction_stack.append(new_transaction)
         _STORAGE.transaction_stack[-1].enter()
 
+        if isinstance(new_transaction, (IndependentTransaction, NormalTransaction)):
+            caching.get_context().stack.push()
+
         # We may have created a new transaction, we may not. current_transaction() returns
         # the actual active transaction (highest NormalTransaction or lowest IndependentTransaction)
         # or None if we're in a non_atomic, or there are no transactions
@@ -343,6 +353,15 @@ class AtomicDecorator(context_decorator.ContextDecorator):
                     except exceptions.GoogleAPIError:
                         raise TransactionFailedError()
         finally:
+            if isinstance(transaction, (IndependentTransaction, NormalTransaction)):
+                context = caching.get_context()
+
+                # Clear the context cache at the end of a transaction
+                if exception:
+                    context.stack.pop(discard=True)
+                else:
+                    context.stack.pop(apply_staged=True, clear_staged=True)
+
             transaction.exit()
 
 
@@ -356,6 +375,8 @@ class NonAtomicDecorator(AtomicDecorator):
     @classmethod
     def _do_enter(cls, state, decorator_args):
         _init_storage()
+
+        context = caching.get_context()
 
         using = decorator_args.get("using", "default")
         connection = connections[using]
@@ -372,7 +393,37 @@ class NonAtomicDecorator(AtomicDecorator):
 
         _STORAGE.transaction_stack.append(new_transaction)
         _STORAGE.transaction_stack[-1].enter()
+
+        # Store the current state of the stack (aside from the first entry)
+        state.original_stack = copy.deepcopy(context.stack.stack[1:])
+
+        # Unwind the in-context stack leaving just the first entry
+        while len(context.stack.stack) > 1:
+            context.stack.pop(discard=True)
+
         return current_transaction()
+
+    @classmethod
+    def _do_exit(cls, state, decorator_args, exception):
+        _init_storage()
+
+        context = caching.get_context()
+
+        transaction = _STORAGE.transaction_stack.pop()
+
+        try:
+            if transaction._datastore_transaction:
+                if exception:
+                    transaction._datastore_transaction.rollback()
+                else:
+                    try:
+                        transaction._datastore_transaction.commit()
+                    except exceptions.GoogleAPIError:
+                        raise TransactionFailedError()
+        finally:
+            # Restore the context stack as it was
+            context.stack.stack = context.stack.stack + state.original_stack
+            transaction.exit()
 
 
 non_atomic = NonAtomicDecorator

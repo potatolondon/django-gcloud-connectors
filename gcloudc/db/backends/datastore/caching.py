@@ -21,7 +21,13 @@ def get_context():
         return _local.context
 
 
-CACHE_ENABLED = getattr(settings, "DJANGAE_CACHE_ENABLED", True)
+CACHE_ENABLED = getattr(settings, "GCLOUDC_CACHE_ENABLED", True)
+
+# The max number of entities in a resultset that will be cached.
+# If a query returns more than this number then only the first ones
+# will be cached
+DEFAULT_MAX_ENTITY_COUNT = 8
+MAX_CACHE_COUNT = getattr(settings, "GCLOUDC_CACHE_MAX_ENTITY_COUNT", DEFAULT_MAX_ENTITY_COUNT)
 
 
 class CachingSituation:
@@ -84,7 +90,9 @@ def _get_cache_key_and_model_from_datastore_key(key):
     return (cache_key, model)
 
 
-def add_entities_to_cache(model, entities, situation, namespace, skip_memcache=False):
+def add_entities_to_cache(model, entities, situation, namespace):
+    from gcloudc.db.transaction import in_atomic_block
+
     if not CACHE_ENABLED:
         return None
 
@@ -96,8 +104,8 @@ def add_entities_to_cache(model, entities, situation, namespace, skip_memcache=F
 
     # Don't cache on Get if we are inside a transaction, even in the context
     # This is because transactions don't see the current state of the datastore
-    # We can still cache in the context on Put() but not in memcache
-    if situation == CachingSituation.DATASTORE_GET and datastore.IsInTransaction():
+    # We can still cache in the context on Put()
+    if situation == CachingSituation.DATASTORE_GET and in_atomic_block():
         return
 
     identifiers = [unique_identifiers_from_entity(model, entity) for entity in entities]
@@ -108,9 +116,9 @@ def add_entities_to_cache(model, entities, situation, namespace, skip_memcache=F
 
 def remove_entities_from_cache_by_key(keys, namespace):
     """
-        Given an iterable of datastore.Keys objects, remove the corresponding entities from caches,
-        both context and memcache, or just memcache if specified.
+        Given an iterable of datastore.Keys objects, remove the corresponding entities from cache
     """
+
     if not CACHE_ENABLED:
         return None
 
@@ -127,8 +135,9 @@ def remove_entities_from_cache_by_key(keys, namespace):
 def get_from_cache_by_key(key):
     """
         Given a datastore.Key (which should already have the namespace applied to it), return an
-        entity from the context cache, falling back to memcache when possible.
+        entity from the context cache
     """
+
     if not CACHE_ENABLED:
         return None
 
@@ -143,7 +152,7 @@ def get_from_cache_by_key(key):
 
 def get_from_cache(unique_identifier, namespace):
     """
-        Return an entity from the context cache, falling back to memcache when possible
+        Return an entity from the context cache
     """
     context = get_context()
 
@@ -162,7 +171,7 @@ def get_from_cache(unique_identifier, namespace):
 def reset_context(keep_disabled_flags=False, *args, **kwargs):
     """
         Called at the beginning and end of each request, resets the thread local
-        context. If you pass keep_disabled_flags=True the memcache_enabled and context_enabled
+        context. If you pass keep_disabled_flags=True the context_enabled
         flags will be preserved, this is really only useful for testing.
     """
 

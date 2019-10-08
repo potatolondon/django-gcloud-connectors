@@ -3,6 +3,8 @@ import sys
 
 from django.conf import settings
 
+from google.cloud.datastore.key import Key
+
 
 def key_or_entity_compare(lhs, rhs):
     """
@@ -11,10 +13,10 @@ def key_or_entity_compare(lhs, rhs):
         rhs.key()
     """
     if hasattr(rhs, "key"):
-        rhs = rhs.key()
+        rhs = rhs.key
 
     if hasattr(lhs, "key"):
-        lhs = lhs.key()
+        lhs = lhs.key
 
     return lhs == rhs
 
@@ -247,10 +249,13 @@ class ContextCache(object):
         self.stack = ContextStack()
 
     def reset(self, keep_disabled_flags=False):
-        if rpc.IsInTransaction():
+        from gcloudc.db.transaction import in_atomic_block
+
+        if in_atomic_block():
             raise RuntimeError(
                 "Clearing the context cache inside a transaction breaks everything, " "we can't let you do that"
             )
+
         self.stack = ContextStack()
         if not keep_disabled_flags:
             self.memcache_enabled = True
@@ -266,7 +271,8 @@ class Context(object):
         self.cache.update(other.cache)
 
         # We have to delete things that don't exist in the other
-        for k in self.cache.keys():
+        keys = list(self.cache)
+        for k in keys:
             if k not in other.cache:
                 del self.cache[k]
 
@@ -276,7 +282,7 @@ class Context(object):
         self.cache.set_multi(identifiers, entity)
 
     def remove_entity(self, entity_or_key):
-        if not isinstance(entity_or_key, rpc.Key):
+        if not isinstance(entity_or_key, Key):
             entity_or_key = entity_or_key.key()
 
         for identifier in self.cache.get_reversed(entity_or_key, compare_func=key_or_entity_compare):
@@ -329,13 +335,13 @@ class ContextStack(object):
         if apply_staged:
             while self.staged:
                 to_apply = self.staged.pop()
-                keys = [x.key() for x in to_apply.cache.values()]
+                keys = [x.key for x in to_apply.cache.values()]
                 if keys:
                     # This assumes that all keys are in the same namespace,
                     # which is almost definitely
                     # going to be the case, but it feels a bit dirty
-                    namespace = keys[0].namespace() or None
-                    caching.remove_entities_from_cache_by_key(keys, namespace=namespace, memcache_only=True)
+                    namespace = keys[0].namespace or None
+                    caching.remove_entities_from_cache_by_key(keys, namespace=namespace)
 
                 self.top.apply(to_apply)
 

@@ -303,51 +303,75 @@ class QueryByKeys(object):
             3. Full select, datastore get
         """
         from gcloudc.db.backends.datastore import transaction
+        from gcloudc.db.backends.datastore.caching import MAX_CACHE_COUNT
 
         base_query = self.queries[0]
+        key_count = len(self.queries_by_key)
 
         is_projection = False
 
+        cache_results = True
         results = None
 
-        if base_query.projection and self.can_multi_query:
-            is_projection = True
+        if key_count == 1:
+            # FIXME: Potentially could use get_multi in memcache and the make a query
+            # for whatever remains
+            key = next(iter(self.queries_by_key))
+            assert(isinstance(key, Key))
 
-            # If we can multi-query in a single query, we do so using a number of
-            # ancestor queries (to stay consistent) otherwise, we just do a
-            # datastore Get, but this will return extra data over the RPC
-            to_fetch = (offset or 0) + limit if limit else None
-            additional_cols = set([x[0] for x in self.ordering if x[0] not in base_query.projection])
+            result = caching.get_from_cache_by_key(key)
+            if result is not None:
+                results = [result]
+                cache_results = False  # Don't update cache, we just got it from there
 
-            multi_query = []
-            orderings = base_query.order
-            for key, queries in self.queries_by_key.items():
-                for query in queries:
-                    if additional_cols:
-                        # We need to include additional orderings in the projection so that we can
-                        # sort them in memory. Annoyingly that means reinstantiating the queries
-                        query = rpc.Query(
-                            kind=query._Query__kind,
-                            filters=query,
-                            projection=list(base_query.projection).extend(list(additional_cols)),
-                            namespace=self.namespace,
-                        )
+        client = transaction._rpc(self.connection)
+        if results is None:
+            if base_query.projection and self.can_multi_query:
+                is_projection = True
 
-                    query.ancestor = key  # Make this an ancestor query
-                    multi_query.append(query)
+                # If we can multi-query in a single query, we do so using a number of
+                # ancestor queries (to stay consistent) otherwise, we just do a
+                # datastore Get, but this will return extra data over the RPC
+                to_fetch = (offset or 0) + limit if limit else None
+                additional_cols = set([x[0] for x in self.ordering if x[0] not in base_query.projection])
 
-            if len(multi_query) == 1:
-                results = multi_query[0].fetch(limit=to_fetch)
+                multi_query = []
+                orderings = base_query.order
+                for key, queries in self.queries_by_key.items():
+                    for query in queries:
+                        if additional_cols:
+                            # We need to include additional orderings in the projection so that we can
+                            # sort them in memory. Annoyingly that means reinstantiating the queries
+                            query = client.query(
+                                kind=query.kind,
+                                filters=query,
+                                projection=list(base_query.projection).extend(list(additional_cols)),
+                                namespace=self.namespace,
+                            )
+
+                        query.ancestor = key  # Make this an ancestor query
+                        multi_query.append(query)
+
+                if len(multi_query) == 1:
+                    results = multi_query[0].fetch(limit=to_fetch)
+                else:
+                    results = AsyncMultiQuery(multi_query, orderings).fetch(limit=to_fetch)
             else:
-                results = AsyncMultiQuery(multi_query, orderings).fetch(limit=to_fetch)
-        else:
-            results = transaction._rpc(self.connection).get([x for x in self.queries_by_key.keys()])
+                results = client.get([x for x in self.queries_by_key.keys()])
 
         def iter_results(results):
             returned = 0
             # This is safe, because Django is fetching all results any way :(
             sorted_results = sorted(results, key=cmp_to_key(partial(django_ordering_comparison, self.ordering)))
             sorted_results = [result for result in sorted_results if result is not None]
+
+            if cache_results and sorted_results:
+                caching.add_entities_to_cache(
+                    self.model,
+                    sorted_results[:MAX_CACHE_COUNT],
+                    caching.CachingSituation.DATASTORE_GET,
+                    self.namespace,
+                )
 
             for result in sorted_results:
                 if is_projection:
@@ -393,7 +417,7 @@ class UniqueQuery(object):
         self._model = model
         self._namespace = namespace
 
-        self._Query__kind = gae_query._Query__kind
+        self.kind = gae_query.kind
 
     def get(self, x):
         return self._gae_query.get(x)
@@ -412,7 +436,7 @@ class UniqueQuery(object):
 
         if ret is None:
             # We do a fast keys_only query to get the result
-            keys_query = rpc.Query(self._gae_query._Query__kind, keys_only=True, namespace=self._namespace)
+            keys_query = rpc.Query(self.kind, keys_only=True, namespace=self._namespace)
             keys_query.update(self._gae_query)
             keys = keys_query.Run(limit=limit, offset=offset)
 

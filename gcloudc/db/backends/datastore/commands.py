@@ -35,6 +35,8 @@ from .utils import (
     has_concrete_parents,
 )
 
+from . import caching
+
 logger = logging.getLogger(__name__)
 
 OPERATORS_MAP = {
@@ -721,6 +723,13 @@ class InsertCommand(object):
                             acquire_unique_markers(self.model, entity, self.connection)
                         )
 
+                caching.add_entities_to_cache(
+                    self.model,
+                    [x[0] for x in entities],
+                    caching.CachingSituation.DATASTORE_GET_PUT,
+                    self.namespace
+                )
+
                 return results
 
             try:
@@ -851,15 +860,19 @@ class DeleteCommand(object):
             # we don't need an explicit batch here, as we are inside a transaction
             # which already applies this behaviour of non blocking RPCs until
             # the transaction is commited
+
+            client = transaction._rpc(self.connection)
+
             for entity in entities_to_delete:
-                transaction._rpc(self.connection).delete(entity.key)
+                client.delete(entity.key)
+
             for entity in entities_to_update:
-                transaction._rpc(self.connection).put(entity)
+                client.put(entity)
 
             # Clean up any special indexes that need to be removed
             for indexer in indexers_for_model(self.model):
                 for entity in entities_to_delete:
-                    indexer.cleanup(entity.key)
+                    indexer.cleanup(client, entity.key)
 
             # Remove any cache keys
             remove_entities_from_cache_by_key(updated_keys, self.namespace)
@@ -937,7 +950,7 @@ class UpdateCommand(object):
         """
             This exists solely for django-debug-toolbar compatibility.
         """
-        return unicode(self).lower()
+        return str(self).lower()
 
     def _update_entity(self, key):
         # This is a list rather than a straight bool, because we need to pass
@@ -997,18 +1010,20 @@ class UpdateCommand(object):
                     Inserts result, and any descendents with their ancestor
                     value set
                 """
-                inserted_key = transaction._rpc(self.connection).put(result)
+                client = transaction._rpc(self.connection)
+                inserted_key = client.put(result)
                 if descendents:
                     for i, descendent in enumerate(descendents):
                         descendents[i] = Entity(
-                            descendent.kind(),
-                            parent=inserted_key,
-                            namespace=inserted_key.namespace(),
-                            id=descendent.key().id() or None,
-                            name=descendent.key().name() or None,
+                            client.key(
+                                descendent.kind,
+                                descendent.key.name if descendent.key.id is None else descendent.key.id,
+                                parent=inserted_key,
+                                namespace=inserted_key.namespace,
+                            )
                         )
                         descendents[i].update(descendent)
-                    transaction._rpc(self.connection).put(descendents)
+                    client.put_multi(descendents)
 
             # this will be async as we're inside a transaction block
             perform_insert()
@@ -1028,12 +1043,20 @@ class UpdateCommand(object):
                 rollback_markers[0] = True
                 # If something dies between here and the `return` statement then we'll have stale unique markers
 
+            # Update the cache with the entity
+            caching.add_entities_to_cache(
+                self.model,
+                [result],
+                caching.CachingSituation.DATASTORE_PUT,
+                self.namespace
+            )
+
             # Return true to indicate update success
             return True
 
         try:
             return update_txt()
-        except:
+        except Exception:
             # any exception raised inside the outer transaction will be rolled
             # back (e.g. and attempt to update the main entity) - however we
             # need to manually handle the nested, independent transactions
