@@ -255,6 +255,7 @@ class EntityTransforms:
 
             if value is not None:
                 result[column] = ensure_datetime(value)
+
         return result
 
     @staticmethod

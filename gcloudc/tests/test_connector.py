@@ -631,7 +631,7 @@ class BackendTests(TestCase):
         # And just for good measure, check the raw value in the datastore
         key = rpc.Key.from_path(DurationModel._meta.db_table, durations_as_3.pk, namespace=DEFAULT_NAMESPACE)
         entity = rpc.Get(key)
-        self.assertTrue(isinstance(entity['duration_field'], (int, long)))
+        self.assertTrue(isinstance(entity['duration_field'], int))
 
     def test_datetime_and_time_fields_precision_for_projection_queries(self):
         """
@@ -641,8 +641,9 @@ class BackendTests(TestCase):
         t = datetime.time(22, 13, 50, 541022)
         dt = datetime.datetime(2016, 5, 27, 18, 40, 12, 927371)
         NullDate.objects.create(time=t, datetime=dt)
-        result = NullDate.objects.all().values_list('time', 'datetime')
+        result = list(NullDate.objects.all().values_list('time', 'datetime'))
         expected = [(t, dt)]
+
         self.assertItemsEqual(result, expected)
 
     def test_filter_with_empty_q(self):
@@ -2009,9 +2010,9 @@ class CascadeDeletionTests(TestCase):
 class AsyncMultiQueryTests(TestCase):
 
     def test_offset_is_correctly_applied(self):
-        TestUser.objects.create(username="Adam", field2="Adam")
-        u2 = TestUser.objects.create(username="Bob")
-        TestUser.objects.create(username="Chloe")
+        TestUser.objects.create(username="Adam", field2="Adam", first_name="A", second_name="A")
+        u2 = TestUser.objects.create(username="Bob", first_name="B", second_name="B")
+        TestUser.objects.create(username="Chloe", first_name="C", second_name="C")
 
         qs = TestUser.objects.filter(
             Q(field2="Adam") | Q(username__in=["Adam", "Bob"])
@@ -2021,9 +2022,9 @@ class AsyncMultiQueryTests(TestCase):
         self.assertItemsEqual([u2], qs)
 
     def test_limit_is_correctly_applied(self):
-        TestUser.objects.create(username="Adam", field2="Adam")
-        u2 = TestUser.objects.create(username="Bob")
-        TestUser.objects.create(username="Chloe")
+        TestUser.objects.create(username="Adam", field2="Adam", first_name="A", second_name="A")
+        u2 = TestUser.objects.create(username="Bob", first_name="B", second_name="B")
+        TestUser.objects.create(username="Chloe", first_name="C", second_name="C")
 
         qs = TestUser.objects.filter(
             Q(field2="Adam") | Q(username__in=["Adam", "Bob", "Chloe"])

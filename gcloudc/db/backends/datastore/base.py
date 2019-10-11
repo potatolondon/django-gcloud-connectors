@@ -23,7 +23,7 @@ from . import dbapi as Database
 
 from .commands import DeleteCommand, FlushCommand, InsertCommand, SelectCommand, UpdateCommand, coerce_unicode
 from .indexing import load_special_indexes
-from .utils import decimal_to_string, get_datastore_key, make_timezone_naive
+from .utils import decimal_to_string, get_datastore_key, make_timezone_naive, ensure_datetime
 
 
 logger = logging.getLogger(__name__)
@@ -379,17 +379,11 @@ class DatabaseOperations(BaseDatabaseOperations):
             value = datetime.datetime.combine(value, datetime.time())
         return value
 
-    def value_to_db_date(self, value):  # Django 1.8 compatibility
-        return self.adapt_datefield_value(value)
-
     def adapt_timefield_value(self, value):
         if value is not None:
             value = make_timezone_naive(value)
             value = datetime.datetime.combine(datetime.datetime.fromtimestamp(0), value)
         return value
-
-    def value_to_db_time(self, value):  # Django 1.8 compatibility
-        return self.adapt_timefield_value(value)
 
     def adapt_decimalfield_value(self, value, max_digits, decimal_places):
         if isinstance(value, decimal.Decimal):
@@ -403,7 +397,7 @@ class DatabaseOperations(BaseDatabaseOperations):
     def value_from_db_datetime(self, value):
         if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
-            value = datetime.datetime.fromtimestamp(float(value) / 1000000.0)
+            value = ensure_datetime(value)
 
         if value is not None and settings.USE_TZ and timezone.is_naive(value):
             value = value.replace(tzinfo=timezone.utc)
@@ -412,7 +406,7 @@ class DatabaseOperations(BaseDatabaseOperations):
     def value_from_db_date(self, value):
         if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
-            value = datetime.datetime.fromtimestamp(float(value) / 1000000.0)
+            value = ensure_datetime(value)
 
         if value:
             value = value.date()
@@ -421,13 +415,14 @@ class DatabaseOperations(BaseDatabaseOperations):
     def value_from_db_time(self, value):
         if isinstance(value, int):
             # App Engine Query's don't return datetime fields (unlike Get) I HAVE NO IDEA WHY
-            value = datetime.datetime.fromtimestamp(float(value) / 1000000.0).time()
+            value = ensure_datetime(value).time()
 
         if value is not None and settings.USE_TZ and timezone.is_naive(value):
             value = value.replace(tzinfo=timezone.utc)
 
         if value:
             value = value.time()
+
         return value
 
     def value_from_db_decimal(self, value):
