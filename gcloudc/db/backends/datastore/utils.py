@@ -9,7 +9,6 @@ from django.db.backends.utils import format_number
 from django.utils import timezone
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.key import Key
-from google.cloud.datastore.query import Query
 
 from gcloudc.utils import memoized
 
@@ -445,3 +444,31 @@ def ensure_datetime(value):
     if isinstance(value, int):
         return datetime.fromtimestamp(value / 1e6)
     return value
+
+
+def count_query(query):
+    """
+        The Google Cloud Datastore API doesn't expose a way to count a query
+        the traditional method of doing a keys-only query is apparently actually
+        slower than this method
+    """
+
+    # Largest 32 bit number, fairly arbitrary but I've seen Java Cloud Datastore
+    # code that uses Integer.MAX_VALUE which is this value
+    MAX_INT = 2147483647
+
+    # Setting a limit of zero and an offset of max int will make
+    # the server (rather than the client) skip the entities and then
+    # return the number of skipped entities, fo realz yo!
+    iterator = query.fetch(limit=0, offset=MAX_INT)
+    [x for x in iterator]  # Force evaluation of the iterator
+
+    count = iterator._skipped_results
+    while iterator._more_results:
+        # If we have more results then use cursor offsetting and repeat
+        iterator = query.fetch(limit=0, offset=MAX_INT, start_cursor=iterator.next_page_token)
+        [x for x in iterator]  # Force evaluation of the iterator
+
+        count += iterator._skipped_results
+
+    return count

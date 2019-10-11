@@ -50,6 +50,10 @@ from gcloudc.db.backends.datastore.utils import (
     normalise_field_value,
 )
 from gcloudc.db.decorators import disable_cache
+from gcloudc.db.backends.datastore import transaction
+from gcloudc.db.backends.datastore.constraints import UNIQUE_MARKER_KIND
+from gcloudc.db.backends.datastore.utils import count_query
+
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
@@ -821,44 +825,43 @@ class ConstraintTests(TestCase):
         self.assertEqual(instance, ModelWithUniques.objects.get(name="One"))
 
     def test_update_updates_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
+        rpc = transaction._rpc(default_connection.alias)
+        initial_count = count_query(rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE))
 
         instance = ModelWithUniques.objects.create(name="One")
 
         self.assertEqual(
             1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+            count_query(rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE)) - initial_count
         )
 
-        qry = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE)
-        qry.Order(("created", rpc.Query.DESCENDING))
-
-        marker = [x for x in qry.Run()][0]
+        qry = rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE, order=("-updated_at",))
+        marker = [x for x in qry.fetch()][0]
         # Make sure we assigned the instance
         self.assertEqual(
             marker["instance"],
-            rpc.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+            rpc.key(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
         )
 
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
-        self.assertEqual(expected_marker, marker.key().id_or_name())
+        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One".encode("ascii")).hexdigest())
+        self.assertEqual(expected_marker, marker.key.id_or_name)
 
         instance.name = "Two"
         instance.save()
 
         self.assertEqual(
             1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+            count_query(rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE)) - initial_count
         )
-        marker = [x for x in qry.Run()][0]
+        marker = [x for x in qry.fetch()][0]
         # Make sure we assigned the instance
         self.assertEqual(
             marker["instance"],
-            rpc.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+            rpc.key(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
         )
 
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("Two").hexdigest())
-        self.assertEqual(expected_marker, marker.key().id_or_name())
+        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("Two".encode("ascii")).hexdigest())
+        self.assertEqual(expected_marker, marker.key.id_or_name)
 
     def test_conflicting_insert_throws_integrity_error(self):
         try:
