@@ -271,3 +271,35 @@ class SpecialIndexesModel(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Permission(models.Model):
+    user = models.ForeignKey(TestUser, on_delete=models.CASCADE)
+    perm = models.CharField(max_length=32)
+
+    def __str__(self):
+        return u"{0} for {1}".format(self.perm, self.user)
+
+    class Meta:
+        ordering = ('user__username', 'perm')
+
+
+class SelfRelatedModel(models.Model):
+    related = models.ForeignKey('self', blank=True, null=True, on_delete=models.SET_NULL)
+
+
+class MultiTableParent(models.Model):
+    parent_field = models.CharField(max_length=32)
+
+
+class ModelWithDates(models.Model):
+    start = models.DateField()
+    end = models.DateField()
+
+
+class MultiTableChildOne(MultiTableParent):
+    child_one_field = models.CharField(max_length=32)
+
+
+class MultiTableChildTwo(MultiTableParent):
+    child_two_field = models.CharField(max_length=32)

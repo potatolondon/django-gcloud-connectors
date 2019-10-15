@@ -38,22 +38,22 @@ from django.test.utils import override_settings
 from django.utils import six
 from django.utils.safestring import SafeText
 from django.utils.six.moves import range
+from gcloudc.db.backends.datastore import transaction
 from gcloudc.db.backends.datastore.commands import FlushCommand
+from gcloudc.db.backends.datastore.constraints import UNIQUE_MARKER_KIND
 from gcloudc.db.backends.datastore.indexing import (
     IExactIndexer,
     add_special_index,
     get_indexer,
 )
 from gcloudc.db.backends.datastore.utils import (
+    count_query,
     decimal_to_string,
     entity_matches_query,
     normalise_field_value,
 )
 from gcloudc.db.decorators import disable_cache
-from gcloudc.db.backends.datastore import transaction
-from gcloudc.db.backends.datastore.constraints import UNIQUE_MARKER_KIND
-from gcloudc.db.backends.datastore.utils import count_query
-
+from gcloudc.db.backends.datastore import indexing
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
@@ -63,10 +63,16 @@ from .models import (
     DurationModel,
     Enclosure,
     IntegerModel,
+    ModelWithDates,
     ModelWithNullableCharField,
     ModelWithUniques,
+    MultiTableChildOne,
+    MultiTableChildTwo,
+    MultiTableParent,
     NullDate,
     NullDateSet,
+    Permission,
+    SelfRelatedModel,
     SpecialIndexesModel,
     TestFruit,
     TestUser,
@@ -585,25 +591,6 @@ class BackendTests(TestCase):
             expected_fruits,
         )
 
-    def test_update_query_does_not_update_entities_which_no_longer_match_query(self):
-        """ When doing queryset.update(field=x), any entities which the query returns but which no
-            longer match the query (due to eventual consistency) should not be altered.
-        """
-        obj = TestFruit.objects.create(name='apple', color='green', is_mouldy=False)
-        with inconsistent_db(probability=0):
-            # alter our object, so that it should no longer match the query that we then do
-            obj.color = 'blue'
-            obj.save()
-            # Now run a query, our object is changed, but the inconsistency means it will still match
-            queryset = TestFruit.objects.filter(color='green')
-            assert queryset.count(), "inconsistent_db context manager isn't working" # sanity
-            # Now run an update with that query, the update should NOT be applied, because it
-            # should re-check that the object still matches the query
-            queryset.update(is_mouldy=True)
-        obj = TestFruit.objects.get(pk=obj.pk)
-        self.assertFalse(obj.is_mouldy)
-
-    @skipIf(django.VERSION < (1, 8), "DurationField only applies to Django <= 1.8")
     def test_duration_field_stored_as_float(self):
         """ See issue #512.  We have a bug report that the DurationField comes back as None when
             the value is set to a particular value which is roughly 3 days. This is caused by it
@@ -1265,19 +1252,19 @@ class EdgeCaseTests(TestCase):
 
         self.assertEqual(0, qs.count())
 
-        TestUser.objects.create(username="Hello")
+        TestUser.objects.create(username="Hello", first_name="A")
         self.assertEqual(1, qs.count())
 
-        TestUser.objects.create(username="Goodbye")
+        TestUser.objects.create(username="Goodbye", first_name="B")
         self.assertEqual(2, qs.count())
 
-        TestUser.objects.create(username="Hello and Goodbye")
+        TestUser.objects.create(username="Hello and Goodbye", first_name="C")
         self.assertEqual(3, qs.count())
 
     def test_impossible_starts_with(self):
-        TestUser.objects.create(username="Hello")
-        TestUser.objects.create(username="Goodbye")
-        TestUser.objects.create(username="Hello and Goodbye")
+        TestUser.objects.create(username="Hello", first_name="A")
+        TestUser.objects.create(username="Goodbye", first_name="B")
+        TestUser.objects.create(username="Hello and Goodbye", first_name="C")
 
         qs = TestUser.objects.filter(
             username__startswith='Hello'
@@ -1541,25 +1528,10 @@ class EdgeCaseTests(TestCase):
             permission.save(force_insert=True)
 
     def test_values_list_on_pk_does_keys_only_query(self):
-        from google.cloud.datastore.query import Query
-
-        def replacement_init(*args, **kwargs):
-            replacement_init.called_args = args
-            replacement_init.called_kwargs = kwargs
-            original_init(*args, **kwargs)
-
-        replacement_init.called_args = None
-        replacement_init.called_kwargs = None
-
-        try:
-            original_init = Query.__init__
-            Query.__init__ = replacement_init
+        with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
             list(TestUser.objects.all().values_list('pk', flat=True))
-        finally:
-            Query.__init__ = original_init
-
-        self.assertTrue(replacement_init.called_kwargs.get('keys_only'))
-        self.assertEqual(5, len(TestUser.objects.all().values_list('pk')))
+            self.assertTrue(keys_only.called)
+            self.assertEqual(5, len(TestUser.objects.all().values_list('pk')))
 
     def test_iexact(self):
         user = TestUser.objects.get(username__iexact="a")

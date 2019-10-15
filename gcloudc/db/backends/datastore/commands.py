@@ -344,9 +344,10 @@ class SelectCommand(object):
         queries = []
         projection = self._exclude_pk(self.query.columns) or None
 
+        # FIXME: Should this always be the projection fields if distinct is True?
         query_kwargs = {
             "kind": self.query.concrete_model._meta.db_table,
-            "distinct_on": self.query.distinct or (),
+            "distinct_on": projection if self.query.distinct else (),
             "projection": projection or (),
             "namespace": self.namespace,
         }
