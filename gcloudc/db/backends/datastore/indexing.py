@@ -15,7 +15,6 @@ from django.db import models
 from django.utils import six
 from gcloudc.core.validators import MaxBytesValidator
 from google.cloud.datastore.entity import Entity
-from google.cloud.datastore.query import Query
 
 from . import transaction
 from .utils import get_top_concrete_parent
@@ -702,12 +701,12 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
                 # substrings of each string in `value`
                 for element in value:
                     length = len(element)
-                    lists = [element[i:j + 1] for i in range(length) for j in range(i, length)]
+                    lists = [element[i : j + 1] for i in range(length) for j in range(i, length)]
                     results.extend(lists)
             else:
                 # `value` is a string. Generate a list of all its substrings.
                 length = len(value)
-                lists = [value[i:j + 1] for i in range(length) for j in range(i, length)]
+                lists = [value[i : j + 1] for i in range(length) for j in range(i, length)]
                 results.extend(lists)
 
         if not results:
@@ -912,7 +911,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
             If we're dealing with RegexIndexer, we create a new index for each
             regex pattern. Indexes are called regex__pattern.
         """
-        return "{}__{}".format(index_type, value.encode("utf-8").encode("hex"))
+        return "{}__{}".format(index_type, value.encode("hex"))
 
     def validate_can_be_indexed(self, value, negated):
         if negated:
@@ -922,7 +921,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
 
     def get_pattern(self, index):
         try:
-            return index.split("__")[-1].decode("hex").decode("utf-8")
+            return index.split("__")[-1].decode("hex")
         except IndexError:
             return ""
 
@@ -947,7 +946,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
         return True
 
     def indexed_column_name(self, field_column, value, index):
-        return "_idx_regex_{0}_{1}".format(field_column, self.get_pattern(index).encode("utf-8").encode("hex"))
+        return "_idx_regex_{0}_{1}".format(field_column, self.get_pattern(index).encode("hex"))
 
     def prep_query_operator(self, op):
         return "exact"

@@ -253,11 +253,11 @@ class Zoo(models.Model):
 
 
 class Enclosure(models.Model):
-    zoo = models.ForeignKey(Zoo, on_delete=models.DO_NOTHING)
+    zoo = models.ForeignKey(Zoo, on_delete=models.CASCADE)
 
 
 class Animal(models.Model):
-    enclosure = models.ForeignKey(Enclosure, on_delete=models.DO_NOTHING)
+    enclosure = models.ForeignKey(Enclosure, on_delete=models.CASCADE)
 
 
 class UUIDTestModel(models.Model):

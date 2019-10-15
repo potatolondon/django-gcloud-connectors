@@ -5,6 +5,7 @@ from django.db import connections
 from django.db.models.query import Q
 from django.db.models.sql.datastructures import EmptyResultSet
 
+from gcloudc.db.backends.datastore import transaction
 from gcloudc.db.backends.datastore.dnf import normalize_query
 from gcloudc.db.backends.datastore.query import (
     Query,
@@ -23,10 +24,11 @@ from .models import (
 DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPACE")
 
 
-def find_where_node(children, column, op, value):
-    for node in children:
-        if node.column == column and node.operator == op and node.value == value:
-            return node
+def find_children_containing_node(list_of_possible_children, column, op, value):
+    for children in list_of_possible_children:
+        for node in children:
+            if node.column == column and node.operator == op and node.value == value:
+                return children
 
 
 class TransformQueryTest(TestCase):
@@ -52,7 +54,7 @@ class TransformQueryTest(TestCase):
 
         self.assertEqual(query.model, TransformTestModel)
         self.assertEqual(query.kind, 'SELECT')
-        self.assertEqual(query.tables, [ TransformTestModel._meta.db_table ])
+        self.assertEqual(query.tables, [TransformTestModel._meta.db_table])
         self.assertIsNone(query.where)
 
     def test_and_filter(self):
@@ -63,9 +65,9 @@ class TransformQueryTest(TestCase):
 
         self.assertEqual(query.model, TransformTestModel)
         self.assertEqual(query.kind, 'SELECT')
-        self.assertEqual(query.tables, [ TransformTestModel._meta.db_table ])
+        self.assertEqual(query.tables, [TransformTestModel._meta.db_table])
         self.assertTrue(query.where)
-        self.assertEqual(2, len(query.where.children)) # Two child nodes
+        self.assertEqual(2, len(query.where.children))  # Two child nodes
 
     def test_exclude_filter(self):
         query = transform_query(
@@ -75,9 +77,9 @@ class TransformQueryTest(TestCase):
 
         self.assertEqual(query.model, TransformTestModel)
         self.assertEqual(query.kind, 'SELECT')
-        self.assertEqual(query.tables, [ TransformTestModel._meta.db_table ])
+        self.assertEqual(query.tables, [TransformTestModel._meta.db_table])
         self.assertTrue(query.where)
-        self.assertEqual(1, len(query.where.children)) # One child node
+        self.assertEqual(1, len(query.where.children))  # One child node
         self.assertTrue(query.where.children[0].negated)
         self.assertEqual(1, len(query.where.children[0].children))
 
@@ -89,9 +91,9 @@ class TransformQueryTest(TestCase):
 
         self.assertEqual(query.model, TransformTestModel)
         self.assertEqual(query.kind, 'SELECT')
-        self.assertEqual(query.tables, [ TransformTestModel._meta.db_table ])
+        self.assertEqual(query.tables, [TransformTestModel._meta.db_table])
         self.assertTrue(query.where)
-        self.assertEqual(2, len(query.where.children)) # Two child nodes
+        self.assertEqual(2, len(query.where.children))  # Two child nodes
         self.assertEqual(["field1", "-field2"], query.order_by)
 
     def test_projection(self):
@@ -228,7 +230,6 @@ class QueryNormalizationTests(TestCase):
                  A  B C A B D
         """
 
-
         query = Query(TestUser, "SELECT")
         query.where = WhereNode('default')
         query.where.children.append(WhereNode('default'))
@@ -282,8 +283,8 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual(query.where.connector, "OR")
         self.assertEqual(query.where.children[0].connector, "AND")
 
-        self.assertTrue(find_where_node(query.where.children[0], "username", "=", "test"))
-        self.assertTrue(find_where_node(query.where.children[0], "email", "=", "test@example.com"))
+        self.assertTrue(find_children_containing_node([query.where.children[0]], "username", "=", "test"))
+        self.assertTrue(find_children_containing_node([query.where.children[0]], "email", "=", "test@example.com"))
 
         qs = TestUser.objects.filter(username="test").exclude(email="test@example.com")
         query = normalize_query(transform_query(
@@ -295,11 +296,15 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual(query.where.connector, "OR")
         self.assertEqual(query.where.children[0].connector, "AND")
 
-        self.assertTrue(find_where_node(query.where.children[0], "username", "=", "test"))
-        self.assertTrue(find_where_node(query.where.children[0], "email", "<", "test@example.com"))
+        possible_children = (query.where.children[0], query.where.children[1])
 
-        self.assertTrue(find_where_node(query.where.children[1], "username", "=", "test"))
-        self.assertTrue(find_where_node(query.where.children[1], "email", ">", "test@example.com"))
+        expected = find_children_containing_node(possible_children, "email", "<", "test@example.com")
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "test"))
+        self.assertTrue(find_children_containing_node([expected], "email", "<", "test@example.com"))
+
+        expected = find_children_containing_node(possible_children, "email", ">", "test@example.com")
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "test"))
+        self.assertTrue(find_children_containing_node([expected], "email", ">", "test@example.com"))
 
         instance = Relation(pk=1)
         qs = instance.related_set.filter(headline__startswith='Fir')
@@ -346,19 +351,25 @@ class QueryNormalizationTests(TestCase):
 
         self.assertEqual(query.where.children[0].connector, "AND")
 
-        self.assertTrue(find_where_node(query.where.children[0], "username", "=", "python"))
-        self.assertTrue(find_where_node(query.where.children[0], "username", "=", "jruby"))
+        possible_children = [query.where.children[i] for i in range(4)]
 
-        self.assertTrue(find_where_node(query.where.children[1], "username", "=", "python"))
-        self.assertTrue(find_where_node(query.where.children[1], "username", "=", "php"))
-        self.assertTrue(find_where_node(query.where.children[1], "username", ">", "perl"))
+        expected = find_children_containing_node(possible_children, "username", "=", "jruby")
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "jruby"))
 
-        self.assertTrue(find_where_node(query.where.children[2], "username", "=", "python"))
-        self.assertTrue(find_where_node(query.where.children[2], "username", "=", "php"))
-        self.assertTrue(find_where_node(query.where.children[2], "username", "<", "perl"))
+        expected = find_children_containing_node(possible_children, "username", ">", "perl")
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "php"))
+        self.assertTrue(find_children_containing_node([expected], "username", ">", "perl"))
 
-        self.assertTrue(find_where_node(query.where.children[3], "username", "=", "python"))
-        self.assertTrue(find_where_node(query.where.children[3], "username", "=", "ruby"))
+        expected = find_children_containing_node(possible_children, "username", "<", "perl")
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "php"))
+        self.assertTrue(find_children_containing_node([expected], "username", "<", "perl"))
+
+        expected = find_children_containing_node(possible_children, "username", "=", "ruby")
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "username", "=", "ruby"))
 
         qs = TestUser.objects.filter(username="test") | TestUser.objects.filter(username="cheese")
 
@@ -370,9 +381,9 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual(query.where.connector, "OR")
         self.assertEqual(2, len(query.where.children))
         self.assertTrue(query.where.children[0].is_leaf)
-        self.assertEqual("cheese", query.where.children[0].value)
+        self.assertTrue("cheese" in (query.where.children[0].value, query.where.children[1].value))
         self.assertTrue(query.where.children[1].is_leaf)
-        self.assertEqual("test", query.where.children[1].value)
+        self.assertTrue("test" in (query.where.children[0].value, query.where.children[1].value))
 
         qs = TestUser.objects.using("default").filter(username__in=set()).values_list('email')
 
@@ -382,7 +393,9 @@ class QueryNormalizationTests(TestCase):
                 qs.query
             ))
 
-        qs = TestUser.objects.filter(username__startswith='Hello') |  TestUser.objects.filter(username__startswith='Goodbye')
+        qs = TestUser.objects.filter(
+            username__startswith='Hello'
+        ) | TestUser.objects.filter(username__startswith='Goodbye')
 
         query = normalize_query(transform_query(
             connections['default'],
@@ -391,9 +404,9 @@ class QueryNormalizationTests(TestCase):
 
         self.assertEqual(2, len(query.where.children))
         self.assertEqual("_idx_startswith_username", query.where.children[0].column)
-        self.assertEqual(u"Goodbye", query.where.children[0].value)
+        self.assertTrue("Goodbye" in (query.where.children[0].value, query.where.children[1].value))
         self.assertEqual("_idx_startswith_username", query.where.children[1].column)
-        self.assertEqual(u"Hello", query.where.children[1].value)
+        self.assertTrue("Hello" in (query.where.children[0].value, query.where.children[1].value))
 
         qs = TestUser.objects.filter(pk__in=[1, 2, 3])
         query = normalize_query(transform_query(
@@ -401,14 +414,16 @@ class QueryNormalizationTests(TestCase):
             qs.query
         ))
 
+        rpc = transaction._rpc(default_connection.alias)
+
         self.assertEqual(3, len(query.where.children))
         self.assertEqual("__key__", query.where.children[0].column)
         self.assertEqual("__key__", query.where.children[1].column)
         self.assertEqual("__key__", query.where.children[2].column)
         self.assertEqual({
-                datastore.Key.from_path(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
-                datastore.Key.from_path(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
-                datastore.Key.from_path(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
             }, {
                 query.where.children[0].value,
                 query.where.children[1].value,
@@ -433,9 +448,9 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual("test", query.where.children[0].children[1].value)
 
         self.assertEqual({
-                datastore.Key.from_path(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
-                datastore.Key.from_path(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
-                datastore.Key.from_path(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
             }, {
                 query.where.children[0].children[0].value,
                 query.where.children[1].children[0].value,
@@ -452,4 +467,5 @@ class QueryNormalizationTests(TestCase):
         try:
             list(query)
         except ValueError:
+            raise
             self.fail("ValueError raised when filtering on multiple different PK equalities")

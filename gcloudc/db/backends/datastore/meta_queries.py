@@ -344,8 +344,8 @@ class QueryByKeys(object):
                             # sort them in memory. Annoyingly that means reinstantiating the queries
                             query = client.query(
                                 kind=query.kind,
-                                filters=query,
-                                projection=list(base_query.projection).extend(list(additional_cols)),
+                                filters=query.filters,
+                                projection=list(base_query.projection) + list(additional_cols),
                                 namespace=self.namespace,
                             )
 

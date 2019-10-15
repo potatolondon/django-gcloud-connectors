@@ -256,7 +256,8 @@ def normalize_query(query):
                 if child.column == "__key__" and child.operator == "=":
                     if pk_equality_found and pk_equality_found != child.value:
                         # Remove this AND branch as it's impossible to return anything
-                        node.children.remove(and_branch)
+                        if and_branch in node.children:
+                            node.children.remove(and_branch)
                     else:
                         pk_equality_found = child.value
             if not node.children:
