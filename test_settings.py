@@ -23,3 +23,5 @@ DATABASES = {
 }
 
 SECRET_KEY = "secret_key_for_testing"
+
+USE_TZ = True

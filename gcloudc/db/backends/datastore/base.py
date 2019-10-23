@@ -2,29 +2,50 @@ import datetime
 import decimal
 import logging
 import os
+import uuid
 import warnings
 
 import requests
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.client import BaseDatabaseClient
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.backends.base.features import BaseDatabaseFeatures
-from django.db.backends.base.introspection import BaseDatabaseIntrospection, TableInfo
+from django.db.backends.base.introspection import (
+    BaseDatabaseIntrospection,
+    TableInfo,
+)
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.base.validation import BaseDatabaseValidation
-from django.utils import six, timezone
+from django.utils import (
+    six,
+    timezone,
+)
 from django.utils.encoding import smart_text
-from google.cloud import datastore, environment_vars
+from google.cloud import (
+    datastore,
+    environment_vars,
+)
 
 from . import dbapi as Database
-
-from .commands import DeleteCommand, FlushCommand, InsertCommand, SelectCommand, UpdateCommand, coerce_unicode
+from .commands import (
+    DeleteCommand,
+    FlushCommand,
+    InsertCommand,
+    SelectCommand,
+    UpdateCommand,
+    coerce_unicode,
+)
 from .indexing import load_special_indexes
-from .utils import decimal_to_string, get_datastore_key, make_timezone_naive, ensure_datetime
-
+from .utils import (
+    decimal_to_string,
+    ensure_datetime,
+    get_datastore_key,
+    make_timezone_naive,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -200,12 +221,19 @@ class DatabaseOperations(BaseDatabaseOperations):
             converters.append(self.convert_time_value)
         elif internal_type == "DecimalField":
             converters.append(self.convert_decimal_value)
+        elif internal_type == 'UUIDField':
+            converters.append(self.convert_uuidfield_value)
         elif db_type == "list":
             converters.append(self.convert_list_value)
         elif db_type == "set":
             converters.append(self.convert_set_value)
 
         return converters
+
+    def convert_uuidfield_value(self, value, expression, connection, context):
+        if value is not None:
+            value = uuid.UUID(value)
+        return value
 
     def convert_textfield_value(self, value, expression, connection, context=None):
         if isinstance(value, bytes):

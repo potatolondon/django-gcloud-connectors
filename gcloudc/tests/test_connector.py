@@ -112,11 +112,13 @@ class BackendTests(TestCase):
         self.assertEqual(0, len(results))
 
     def test_entity_matches_query(self):
+        rpc = transaction._rpc(default_connection.alias)
+
         entity = Entity("test_model")
         entity["name"] = "Charlie"
         entity["age"] = 22
 
-        query = Query("test_model")
+        query = rpc.query(kind="test_model")
         query["name ="] = "Charlie"
         self.assertTrue(entity_matches_query(entity, query))
 
@@ -165,9 +167,11 @@ class BackendTests(TestCase):
         fruit = TestFruit.objects.create(name="Apple", color="Red")
         self.assertEqual("Unknown", fruit.origin)
 
-        instance = rpc.Get(rpc.Key.from_path(TestFruit._meta.db_table, fruit.pk, namespace=DEFAULT_NAMESPACE))
+        rpc = transaction._rpc(default_connection.alias)
+
+        instance = rpc.get(rpc.key(TestFruit._meta.db_table, fruit.pk, namespace=DEFAULT_NAMESPACE))
         del instance["origin"]
-        rpc.Put(instance)
+        rpc.put(instance)
 
         fruit = TestFruit.objects.get()
         self.assertIsNone(fruit.origin)
@@ -545,6 +549,8 @@ class BackendTests(TestCase):
         Datastore entities. That can easily happen when you added
         new field to model and did not populated all existing entities
         """
+        rpc = transaction._rpc(default_connection.alias)
+
         # Clean state
         self.assertEqual(TestFruit.objects.count(), 0)
 
@@ -556,14 +562,14 @@ class BackendTests(TestCase):
         # Color fields is missing (not even None)
         # we need more than 1 so we explore all sorting branches
         values = {'name': 'c'}
-        entity = rpc.Entity(TestFruit._meta.db_table, namespace=DEFAULT_NAMESPACE, **values)
+        entity = Entity(rpc.key(TestFruit._meta.db_table, namespace=DEFAULT_NAMESPACE))
         entity.update(values)
-        rpc.Put(entity)
+        rpc.put(entity)
 
         values = {'name': 'd'}
-        entity = rpc.Entity(TestFruit._meta.db_table, namespace=DEFAULT_NAMESPACE, **values)
+        entity = Entity(rpc.key(TestFruit._meta.db_table, namespace=DEFAULT_NAMESPACE))
         entity.update(values)
-        rpc.Put(entity)
+        rpc.put(entity)
 
         # Ok, we can get all 4 instances
         self.assertEqual(TestFruit.objects.count(), 4)
@@ -620,8 +626,10 @@ class BackendTests(TestCase):
         self.assertEqual(durations_as_3.duration_field, td3)
         self.assertEqual(durations_as_3.duration_field_nullable, td3)
         # And just for good measure, check the raw value in the datastore
-        key = rpc.Key.from_path(DurationModel._meta.db_table, durations_as_3.pk, namespace=DEFAULT_NAMESPACE)
-        entity = rpc.Get(key)
+        rpc = transaction._rpc(default_connection.alias)
+
+        key = rpc.key(DurationModel._meta.db_table, durations_as_3.pk, namespace=DEFAULT_NAMESPACE)
+        entity = rpc.get(key)
         self.assertTrue(isinstance(entity['duration_field'], int))
 
     def test_datetime_and_time_fields_precision_for_projection_queries(self):
