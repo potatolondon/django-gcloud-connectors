@@ -230,7 +230,7 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
                 unindex = True
                 values = e.processed_value
 
-            if not hasattr(values, "__iter__"):
+            if not hasattr(values, "__iter__") or isinstance(values, (bytes, str)):
                 values = [values]
 
             # If the indexer returns additional entities (instead of indexing a special column)

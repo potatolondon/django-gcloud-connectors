@@ -756,7 +756,7 @@ class InsertCommand(object):
         """
             This exists solely for django-debug-toolbar compatibility.
         """
-        return unicode(self).lower()
+        return str(self).lower()
 
     def __str__(self):
         return generate_sql_representation(self)
