@@ -13,6 +13,8 @@ tests_specialindexesmodel:
   - iendswith
   - startswith
   - istartswith
+  - regex__285b412d5a5d295c772b
+  - iregex__285b412d5a5d295c772b
   nickname:
   - contains
   sample_list:
@@ -22,6 +24,7 @@ tests_specialindexesmodel:
   - item__icontains
   - item__iendswith
   - item__istartswith
+  - item__regex__285b412d5a5d295c772b
 tests_testfruit:
   color:
   - icontains

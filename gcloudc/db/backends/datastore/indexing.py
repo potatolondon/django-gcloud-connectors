@@ -1,3 +1,4 @@
+import codecs
 import datetime
 import logging
 import os
@@ -903,6 +904,19 @@ class IStartsWithIndexer(StartsWithIndexer):
         return "_idx_istartswith_{0}".format(field_column)
 
 
+def _to_hex(value):
+    value = codecs.encode(
+        value.encode("utf8"), "hex"
+    ).decode("utf8")
+    return value
+
+
+def _from_hex(value):
+    return codecs.decode(
+        value.encode("utf8"), "hex"
+    ).decode("utf8")
+
+
 class RegexIndexer(StringIndexerMixin, Indexer):
     OPERATOR = "regex"
 
@@ -911,7 +925,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
             If we're dealing with RegexIndexer, we create a new index for each
             regex pattern. Indexes are called regex__pattern.
         """
-        return "{}__{}".format(index_type, value.encode("hex"))
+        return "{}__{}".format(index_type, _to_hex(value))
 
     def validate_can_be_indexed(self, value, negated):
         if negated:
@@ -921,7 +935,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
 
     def get_pattern(self, index):
         try:
-            return index.split("__")[-1].decode("hex")
+            return _from_hex(index.split("__")[-1])
         except IndexError:
             return ""
 
@@ -946,7 +960,7 @@ class RegexIndexer(StringIndexerMixin, Indexer):
         return True
 
     def indexed_column_name(self, field_column, value, index):
-        return "_idx_regex_{0}_{1}".format(field_column, self.get_pattern(index).encode("hex"))
+        return "_idx_regex_{0}_{1}".format(field_column, _to_hex(self.get_pattern(index)))
 
     def prep_query_operator(self, op):
         return "exact"
@@ -956,13 +970,13 @@ class IRegexIndexer(RegexIndexer):
     OPERATOR = "iregex"
 
     def prepare_index_type(self, index_type, value):
-        return "{}__{}".format(index_type, value.encode("hex"))
+        return "{}__{}".format(index_type, _to_hex(value))
 
     def prep_value_for_database(self, value, index, **kwargs):
         return self.check_if_match(value, index, flags=re.IGNORECASE)
 
     def indexed_column_name(self, field_column, value, index):
-        return "_idx_iregex_{0}_{1}".format(field_column, self.get_pattern(index).encode("hex"))
+        return "_idx_iregex_{0}_{1}".format(field_column, _to_hex(self.get_pattern(index)))
 
 
 _REGISTERED_INDEXERS = []
