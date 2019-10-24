@@ -49,6 +49,14 @@ class Transaction(object):
         """
         Interface to the Datastore client Key factory.
         """
+        assert("namespace" not in kwargs)
+        namespace = self._connection.settings_dict.get("NAMESPACE", "")
+        kwargs["namespace"] = namespace
+
+        parent = kwargs.get("parent")
+        if parent:
+            assert(parent.namespace == namespace)
+
         return self._connection.gclient.key(*args, **kwargs)
 
     def get(self, key_or_keys, missing=None):
@@ -223,6 +231,9 @@ def _rpc(using):
         RootTransaction() which is basically no transaction at all.
     """
 
+    assert(isinstance(using, str))
+    assert(using)
+
     class RootTransaction(Transaction):
         def _enter(self):
             pass
@@ -230,7 +241,6 @@ def _rpc(using):
         def _exit(self):
             pass
 
-    assert(using)
     return current_transaction(using) or RootTransaction(connections[using].connection)
 
 
@@ -251,7 +261,7 @@ def current_transaction(using="default"):
     active_transaction = None
 
     # Return the last Transaction object with a connection
-    for txn in reversed(_STORAGE.transaction_stack):
+    for txn in reversed(_STORAGE.transaction_stack.get(using, [])):
         if isinstance(txn, IndependentTransaction):
             active_transaction = txn
             break
@@ -268,7 +278,7 @@ def current_transaction(using="default"):
 
 def _init_storage():
     if not hasattr(_STORAGE, "transaction_stack"):
-        _STORAGE.transaction_stack = []
+        _STORAGE.transaction_stack = {}
 
 
 class TransactionFailedError(Exception):
@@ -299,7 +309,7 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         mandatory = False if mandatory is None else mandatory
         independent = False if independent is None else independent
         read_only = False if read_only is None else read_only
-        using = "default" if using is None else using
+        state.using = using = "default" if using is None else using
 
         # FIXME: Implement context caching for transactions
         enable_cache = decorator_args.get("enable_cache", True)
@@ -326,8 +336,8 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         else:
             new_transaction = NormalTransaction(connection)
 
-        _STORAGE.transaction_stack.append(new_transaction)
-        _STORAGE.transaction_stack[-1].enter()
+        _STORAGE.transaction_stack.setdefault(using, []).append(new_transaction)
+        _STORAGE.transaction_stack[using][-1].enter()
 
         if isinstance(new_transaction, (IndependentTransaction, NormalTransaction)):
             caching.get_context().stack.push()
@@ -341,7 +351,7 @@ class AtomicDecorator(context_decorator.ContextDecorator):
     def _do_exit(cls, state, decorator_args, exception):
         _init_storage()
 
-        transaction = _STORAGE.transaction_stack.pop()
+        transaction = _STORAGE.transaction_stack[state.using].pop()
 
         try:
             if transaction._datastore_transaction:
@@ -378,7 +388,7 @@ class NonAtomicDecorator(AtomicDecorator):
 
         context = caching.get_context()
 
-        using = decorator_args.get("using", "default")
+        state.using = using = decorator_args.get("using", "default")
         connection = connections[using]
 
         # Connect if necessary (mainly in tests)
@@ -391,8 +401,8 @@ class NonAtomicDecorator(AtomicDecorator):
         # For non_atomic blocks we pass a Batch as the transaction
         new_transaction = NoTransaction(connection.gclient.batch())
 
-        _STORAGE.transaction_stack.append(new_transaction)
-        _STORAGE.transaction_stack[-1].enter()
+        _STORAGE.transaction_stack.setdefault(using, []).append(new_transaction)
+        _STORAGE.transaction_stack[using][-1].enter()
 
         # Store the current state of the stack (aside from the first entry)
         state.original_stack = copy.deepcopy(context.stack.stack[1:])
@@ -409,7 +419,7 @@ class NonAtomicDecorator(AtomicDecorator):
 
         context = caching.get_context()
 
-        transaction = _STORAGE.transaction_stack.pop()
+        transaction = _STORAGE.transaction_stack[state.using].pop()
 
         try:
             if transaction._datastore_transaction:

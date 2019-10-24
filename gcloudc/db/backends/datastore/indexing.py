@@ -605,10 +605,8 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
 
         value = list(set(value))  # De-duplicate
 
-        namespace = connection.settings_dict.get("NAMESPACE", "")
-
         key = transaction._rpc(using=connection.alias).key(
-            self._generate_kind_name(model, column), self.OPERATOR, namespace=namespace
+            self._generate_kind_name(model, column), self.OPERATOR
         )
         entity = Entity(key)
         entity[self.INDEXED_COLUMN_NAME] = value

@@ -312,10 +312,10 @@ class MockInstance(object):
 
 def key_exists(connection, key):
     from . import transaction
-
     qry = transaction._rpc(connection).query(namespace=key.namespace, ancestor=key)
     qry.keys_only()
-    return bool([x for x in qry.fetch(1)])
+    qry.add_filter("__key__", "=", key)
+    return count_query(qry) > 0
 
 
 # Null-friendly comparison functions

@@ -56,6 +56,11 @@ def acquire_unique_markers(model, entity, connection):
     in the outer transaction if required.
     """
 
+    using = connection.alias
+    assert(using)
+
+    rpc = transaction._rpc(using)
+
     def _put_unique_marker(unique_marker_entity):
         """
         Update a unique marker entity with some new properties and persist
@@ -64,7 +69,7 @@ def acquire_unique_markers(model, entity, connection):
         unique_marker_entity["updated_at"] = datetime.datetime.utcnow()
         unique_marker_entity["instance"] = entity.key
         # any put() is essentially async inside a transaction/batch operation
-        transaction._rpc(connection).put(unique_marker_entity)
+        rpc.put(unique_marker_entity)
 
         # update the in memory reference of any markers acquired
         acquired_markers.append(unique_marker_entity.key)
@@ -78,7 +83,7 @@ def acquire_unique_markers(model, entity, connection):
     # (note that the raw datastore API get has an odd signature, where you
     # need to pass a list kwarg to explicity identify which ones are missing)
     missing_markers = []
-    existing_unique_markers = transaction._rpc(connection).get(unique_marker_keys, missing=missing_markers)
+    existing_unique_markers = rpc.get(unique_marker_keys, missing=missing_markers)
 
     # handle the markers we know don't exist yet - these can be a straight put()
     for missing_entity in missing_markers:
@@ -99,7 +104,7 @@ def acquire_unique_markers(model, entity, connection):
         elif existing_marker["instance"] != entity.key:
 
             # double check the instance isn't stale / deleted now
-            if key_exists(connection, existing_marker["instance"]):
+            if key_exists(using, existing_marker["instance"]):
 
                 # we can reverse parse the named key to find the fields
                 # which have failed the unique constraint check
@@ -131,7 +136,7 @@ def delete_unique_markers(unique_marker_keys, connection):
     `delete_unique_markers_for_entity` which calculates the named keys
     from the entity values.
     """
-    transaction._rpc(connection).delete(unique_marker_keys)
+    transaction._rpc(connection.alias).delete(unique_marker_keys)
 
 
 @transaction.atomic()
@@ -143,7 +148,7 @@ def delete_unique_markers_for_entity(model, entity, connection, refetch=True):
     UniqueMarker entities by key for a small performance win.
     """
     unique_marker_keys = _get_unique_marker_keys_for_entity(model, entity, connection, refetch=refetch)
-    transaction._rpc(connection).delete(unique_marker_keys)
+    transaction._rpc(connection.alias).delete(unique_marker_keys)
 
 
 @transaction.atomic()

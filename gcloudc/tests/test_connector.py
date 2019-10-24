@@ -169,7 +169,7 @@ class BackendTests(TestCase):
 
         rpc = transaction._rpc(default_connection.alias)
 
-        instance = rpc.get(rpc.key(TestFruit._meta.db_table, fruit.pk, namespace=DEFAULT_NAMESPACE))
+        instance = rpc.get(rpc.key(TestFruit._meta.db_table, fruit.pk))
         del instance["origin"]
         rpc.put(instance)
 
@@ -562,12 +562,12 @@ class BackendTests(TestCase):
         # Color fields is missing (not even None)
         # we need more than 1 so we explore all sorting branches
         values = {'name': 'c'}
-        entity = Entity(rpc.key(TestFruit._meta.db_table, namespace=DEFAULT_NAMESPACE))
+        entity = Entity(rpc.key(TestFruit._meta.db_table))
         entity.update(values)
         rpc.put(entity)
 
         values = {'name': 'd'}
-        entity = Entity(rpc.key(TestFruit._meta.db_table, namespace=DEFAULT_NAMESPACE))
+        entity = Entity(rpc.key(TestFruit._meta.db_table))
         entity.update(values)
         rpc.put(entity)
 
@@ -628,7 +628,7 @@ class BackendTests(TestCase):
         # And just for good measure, check the raw value in the datastore
         rpc = transaction._rpc(default_connection.alias)
 
-        key = rpc.key(DurationModel._meta.db_table, durations_as_3.pk, namespace=DEFAULT_NAMESPACE)
+        key = rpc.key(DurationModel._meta.db_table, durations_as_3.pk)
         entity = rpc.get(key)
         self.assertTrue(isinstance(entity['duration_field'], int))
 
@@ -835,7 +835,7 @@ class ConstraintTests(TestCase):
         # Make sure we assigned the instance
         self.assertEqual(
             marker["instance"],
-            rpc.key(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+            rpc.key(instance._meta.db_table, instance.pk)
         )
 
         expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One".encode("ascii")).hexdigest())
@@ -852,7 +852,7 @@ class ConstraintTests(TestCase):
         # Make sure we assigned the instance
         self.assertEqual(
             marker["instance"],
-            rpc.key(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+            rpc.key(instance._meta.db_table, instance.pk)
         )
 
         expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("Two".encode("ascii")).hexdigest())
@@ -931,12 +931,10 @@ class ConstraintTests(TestCase):
 
     def test_recently_deleted_unique_doesnt_come_back(self):
         instance = ModelWithUniques.objects.create(name="One")
-
-        with inconsistent_db():
-            instance.delete()
-            self.assertEqual(0, ModelWithUniques.objects.filter(name="One").count())
-            self.assertFalse(ModelWithUniques.objects.filter(name="One").exists())
-            self.assertFalse(list(ModelWithUniques.objects.all()))  # Triple-check
+        instance.delete()
+        self.assertEqual(0, ModelWithUniques.objects.filter(name="One").count())
+        self.assertFalse(ModelWithUniques.objects.filter(name="One").exists())
+        self.assertFalse(list(ModelWithUniques.objects.all()))  # Triple-check
 
     def test_conflicting_update_throws_integrity_error(self):
         ModelWithUniques.objects.create(name="One")
@@ -1786,7 +1784,7 @@ class TestSpecialIndexers(TestCase):
             self.assertEqual(len(qry), len([x for x in self.names if x.lower().startswith(name.lower())]))
 
     def test_regex_lookup_and_iregex_lookup(self):
-        tests = ['([A-Z])\w+', '([A-Z])\w+\s[+]\s([A-Z])\w+', '\-Test\-']
+        tests = [r'([A-Z])\w+', r'([A-Z])\w+\s[+]\s([A-Z])\w+', r'\-Test\-']
         for pattern in tests:
             qry = self.qry.filter(name__regex=pattern)
             self.assertEqual(len(qry), len([x for x in self.names if re.search(pattern, x)]))
@@ -1932,8 +1930,10 @@ class NamespaceTests(TestCase):
         """
 
         TestFruit.objects.using("nonamespace").create(name="Apple", color="Red")
-        key = rpc.Key.from_path(TestFruit._meta.db_table, "Apple")
-        self.assertTrue(rpc.Get([key])[0])
+        rpc = transaction._rpc("nonamespace")
+
+        key = rpc.key(TestFruit._meta.db_table, "Apple")
+        self.assertTrue(rpc.get(key))
 
     @skipIf("nonamespace" not in settings.DATABASES, "This test is designed for the Djangae testapp settings")
     def test_move_objects_between_namespaces(self):

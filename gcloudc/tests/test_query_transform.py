@@ -26,7 +26,7 @@ DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPA
 
 def find_children_containing_node(list_of_possible_children, column, op, value):
     for children in list_of_possible_children:
-        for node in children:
+        for node in (children or []):
             if node.column == column and node.operator == op and node.value == value:
                 return children
 

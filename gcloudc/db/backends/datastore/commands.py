@@ -375,9 +375,10 @@ class SelectCommand(object):
 
         assert self.query.where
 
+        rpc = transaction._rpc(self.connection)
         # Go through the normalized query tree
         for and_branch in self.query.where.children:
-            query = transaction._rpc(self.connection).query(**query_kwargs)
+            query = rpc.query(**query_kwargs)
 
             if self.keys_only:
                 query.keys_only()
@@ -404,7 +405,7 @@ class SelectCommand(object):
                     # by key. Fixme: if we ever add key properties this will break if
                     # someone is trying to filter on a key which has a different namespace
                     # to the active one.
-                    value = Key(value.kind, value.id_or_name, project=value.project, namespace=self.namespace)
+                    value = rpc.key(value.kind, value.id_or_name)
 
                 # If there is already a value for this lookup, we need to make the
                 # value a list and append the new entry
@@ -453,7 +454,7 @@ class SelectCommand(object):
         # Apply the namespace before excluding
         rpc = transaction._rpc(self.connection)
 
-        excluded_pks = [rpc.key(x.kind, x.id_or_name, namespace=self.namespace) for x in self.query.excluded_pks]
+        excluded_pks = [rpc.key(x.kind, x.id_or_name) for x in self.query.excluded_pks]
 
         high_mark = self.query.high_mark
         low_mark = self.query.low_mark
@@ -607,7 +608,7 @@ class InsertCommand(object):
         self.model = model
         self.objs = objs
         self.connection = connection
-        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.settings_dict.get("NAMESPACE", "")
         self.raw = raw
         self.fields = fields
 
@@ -670,7 +671,7 @@ class InsertCommand(object):
                 if descendents:
                     for i, descendent in enumerate(descendents):
                         key = rpc.key(
-                            descendent.kind, descendent.key.id_or_name, parent=new_key, namespace=new_key.namespace
+                            descendent.kind, descendent.key.id_or_name, parent=new_key
                         )
                         descendents[i] = Entity(key)
                         descendents[i].update(descendent)
@@ -834,7 +835,7 @@ class DeleteCommand(object):
 
             # get() expects Key objects, not just dicts with id keys
             keys_in_slice = [get_datastore_key(self.connection, self.model, key_id) for key_id in key_slice]
-            entities = transaction._rpc(self.connection).get(keys_in_slice)
+            entities = transaction._rpc(self.connection.alias).get(keys_in_slice)
             for entity in entities:
 
                 # make sure the entity still exists
@@ -863,7 +864,7 @@ class DeleteCommand(object):
             # which already applies this behaviour of non blocking RPCs until
             # the transaction is commited
 
-            client = transaction._rpc(self.connection)
+            client = transaction._rpc(self.connection.alias)
 
             for entity in entities_to_delete:
                 client.delete(entity.key)
@@ -964,7 +965,7 @@ class UpdateCommand(object):
 
         @transaction.atomic(cache_enabled=False)
         def update_txt():
-            result = transaction._rpc(self.connection).get(key)
+            result = transaction._rpc(self.connection.alias).get(key)
             if result is None:
                 # Return false to indicate update failure
                 return False
@@ -1012,7 +1013,7 @@ class UpdateCommand(object):
                     Inserts result, and any descendents with their ancestor
                     value set
                 """
-                client = transaction._rpc(self.connection)
+                client = transaction._rpc(self.connection.alias)
                 inserted_key = client.put(result)
                 if descendents:
                     for i, descendent in enumerate(descendents):
@@ -1021,7 +1022,6 @@ class UpdateCommand(object):
                                 descendent.kind,
                                 descendent.key.name if descendent.key.id is None else descendent.key.id,
                                 parent=inserted_key,
-                                namespace=inserted_key.namespace,
                             )
                         )
                         descendents[i].update(descendent)
