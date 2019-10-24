@@ -265,4 +265,40 @@ def normalize_query(query):
 
     detect_conflicting_key_filter(query.where)
 
+    def remove_unnecessary_nodes(node):
+        """
+            Sometimes you end up with a branch that has two nodes that
+            have the same column and operator, but different values. When
+            this happens we need to simplify, e.g.:
+
+            AND:[username<A],[username<B] -> AND:[username<A]
+        """
+
+        for and_branch in node.children[:]:
+            seen = {}
+
+            altered = False
+            for node in and_branch.children:
+                key = (node.column, node.operator)
+                if key in seen:
+                    altered = True
+                    if node.operator in ('<', '<='):
+                        seen[key].value = min(seen[key].value, node.value)
+                    elif node.operator in ('>', '>='):
+                        seen[key].value = max(seen[key].value, node.value)
+                    elif node.operator == "=":
+                        # Impossible filter! remove the AND branch entirely
+                        if and_branch in node.children:
+                            node.children.remove(and_branch)
+                        break
+                    else:
+                        pass
+                else:
+                    seen[key] = node
+
+            if altered:
+                and_branch.children = [x for x in seen.values()]
+
+    remove_unnecessary_nodes(query.where)
+
     return query
