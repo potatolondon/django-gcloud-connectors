@@ -718,13 +718,13 @@ class InsertCommand(object):
                     if len(entities) > 1:
                         check_unique_markers_in_memory(self.model, entities)
 
-                    # even for bulk insert we also need to do the full check, to
-                    # query against unique markers created before the operation
-                    for entity, _ in entities:
-                        new_marker_keys.extend(
-                            # this is executed as an independent transaction
-                            acquire_unique_markers(self.model, entity, self.connection)
-                        )
+                    # # even for bulk insert we also need to do the full check, to
+                    # # query against unique markers created before the operation
+                    # for entity, _ in entities:
+                    #     new_marker_keys.extend(
+                    #         # this is executed as an independent transaction
+                    #         acquire_unique_markers(self.model, entity, self.connection)
+                    #     )
 
                 caching.add_entities_to_cache(
                     self.model,

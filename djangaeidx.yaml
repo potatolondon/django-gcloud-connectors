@@ -33,7 +33,6 @@ tests_specialindexesmodel:
   - item__regex__285b412d5a5d295c772b5c735b2b5d5c73285b412d5a5d295c772b
   - item__iregex__285b412d5a5d295c772b5c735b2b5d5c73285b412d5a5d295c772b
   - item__regex__5c2d546573745c2d
-  - item__iregex__5c2d546573745c2d
 tests_testfruit:
   color:
   - icontains
