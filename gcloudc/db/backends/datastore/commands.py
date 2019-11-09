@@ -658,13 +658,25 @@ class InsertCommand(object):
         def perform_insert(entities):
             results = []
             rpc = transaction._rpc(self.connection.alias)
+            must_handle_unique = has_active_unique_constraints(self.model)
 
             for primary, descendents in entities:
                 if primary.key.is_partial:
                     primary.key = primary.key.completed_key(
                         rpc._generate_id()
                     )
-
+                
+                if must_handle_unique:
+                    combinations = _unique_combinations(self.model, ignore_pk=True)
+                    for combination in combinations:
+                        query = rpc.query(kind=primary.kind)
+                        for field in combination:
+                            query.add_filter(field, '=', primary.get(field))
+                        
+                        res = query.fetch(1)
+                        if len(list(res)) > 0:
+                            raise IntegrityError('Tried to INSERT violating a unique constraint')
+                            
                 rpc.put(primary)
                 new_key = primary.key
 
@@ -709,7 +721,6 @@ class InsertCommand(object):
                 results = perform_insert(entities)
 
                 if has_active_unique_constraints(self.model):
-
                     # if we're doing a bulk insert, due to the isolation of the
                     # datastore inside transactions we won't find duplicate unique
                     # marker keys created as part of the bulk operation -
