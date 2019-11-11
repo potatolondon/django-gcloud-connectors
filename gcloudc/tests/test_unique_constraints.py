@@ -83,34 +83,6 @@ class TestUniqueConstraints(TestCase):
             TestUserTwo.objects.bulk_create([TestUserTwo(username="Mickey Bell"), TestUserTwo(username="Tony Thorpe")])
         self.assertEqual(TestUserTwo.objects.count(), 2)
 
-    def test_if_subsequent_marker_put_fails(self):
-        """
-        Assert that when bulk inserting, if an exception is raised in the marker
-        independent transaction (not the first), all put() operations are rolled
-        back to mimic a single atomic block.
-        """
-        user = TestUserTwo.objects.create(username="Tony Thorpe")
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)
-
-        with self.assertRaises(IntegrityError):
-            TestUserTwo.objects.bulk_create([TestUserTwo(username="Mickey Bell"), TestUserTwo(username="Tony Thorpe")])
-
-        # neither insert should have worked
-        self.assertEqual(TestUserTwo.objects.count(), 1)
-
-        # there should be no new unique markers
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 1)
-
-        # the previous unique markers should have remained
-        key = Key(
-            TestUserTwo._meta.db_table, user.pk, project="test",
-            namespace=connection.settings_dict["NAMESPACE"]
-        )
-        self.assertEqual(unique_markers[0]["instance"], key)
-
     @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
     def test_insert_with_global_unique_checks_disabled(self):
         """
@@ -145,124 +117,29 @@ class TestUniqueConstraints(TestCase):
 
         # but for the model where it is, normal behaviour is demonstrated
         user_kwargs = {"username": "BS3"}
-        user_three = TestUserTwo.objects.create(**user_kwargs)
+        TestUserTwo.objects.create(**user_kwargs)
         with self.assertRaises(IntegrityError):
             TestUserTwo.objects.create(**user_kwargs)
-
-        # unique markers would also be written in this case
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 1)
-        for marker in unique_markers:
-            key = Key(
-                TestUserTwo._meta.db_table, user_three.pk, project="test",
-                namespace=connection.settings_dict["NAMESPACE"]
-            )
-            self.assertEqual(marker["instance"], key)
-
-    def test_if_marker_put_fails(self):
-        """
-        Assert that if any UniqueMarker put operation fails, when run
-        as part of a transaction kicked off from another entity insert,
-        this outer transaction would also fail.
-        """
-        with sleuth.detonate(
-            "gcloudc.db.backends.datastore.constraints.unique_identifiers_from_entity", TransactionFailedError
-        ):
-            with self.assertRaises(TransactionFailedError):
-                TestUser.objects.create(username="mattyh", first_name="Matt", second_name="Hill")
-
-        # there should be no user object...
-        self.assertEqual(TestUser.objects.count(), 0)
-
-        # and no unique markers
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 0)
-
-    def test_insert_ok_if_unique_marker_has_stale_reference(self):
-        """
-        Assert that when creating a new instance, if a UniqueMarker already
-        exists for the given unique constraint combiniation, the operation
-        will still succeed if the entity reference is stale (aka that entity
-        has been deleted).
-        """
-        user = TestUserTwo.objects.create(username="mattyh")
-
-        # delete the entity using the raw API to avoid removing the marker
-        client = _get_client()
-        key = client.key(
-            TestUserTwo._meta.db_table, user.pk,
-            namespace=connection.settings_dict["NAMESPACE"]
-        )
-        client.delete(key)
-
-        # the markers will still be there
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)
-
-        new_user = TestUserTwo.objects.create(username="mattyh")
-
-        # the markers should ref the new entity
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        key = Key(
-            TestUserTwo._meta.db_table, new_user.pk, project="test",
-            namespace=connection.settings_dict["NAMESPACE"]
-        )
-        self.assertEqual(unique_markers[0]["instance"], key)
-
-    def test_update_updates_markers(self):
-        """
-        Assert that previous and now un-necessary unique markers are deleted
-        as part of any updated operation, and new markers are created where
-        needed.
-        """
-        user = TestUserTwo.objects.create(username="AshtonGateEight")
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 1)
-        for marker in unique_markers:
-            # refs the right entity
-            key = Key(
-                TestUserTwo._meta.db_table, user.pk, project="test",
-                namespace=connection.settings_dict["NAMESPACE"]
-            )
-            self.assertEqual(marker["instance"], key)
-            # the named key should ref the unique username value
-            self.assertIn(_format_value_for_identifier(user.username), marker.key.name)
-
-        # now do the update operation
-        user.username = "Ashton Robin"
-        user.save()
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 1)
-        for marker in unique_markers:
-            # refs the right entity
-            key = Key(
-                TestUserTwo._meta.db_table, user.pk, project="test",
-                namespace=connection.settings_dict["NAMESPACE"]
-            )
-            self.assertEqual(marker["instance"], key)
-            # the named key should ref the new unique value
-            self.assertIn(_format_value_for_identifier(user.username), marker.key.name)
 
     def test_update_with_constraint_conflict(self):
         TestUserTwo.objects.create(username="AshtonGateEight")
         user_two = TestUserTwo.objects.create(username="AshtonGateSeven")
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        named_keys = [marker.key.name for marker in unique_markers]
-        self.assertEqual(len(unique_markers), 2)
 
         # now do the update operation
         user_two.username = "AshtonGateEight"
         with self.assertRaises(IntegrityError):
             user_two.save()
 
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 2)
-        self.assertItemsEqual(named_keys, [marker.key.name for marker in unique_markers])
+    def test_update_with_constraint_together_conflict(self):
+        TestUser.objects.create(username="tommyd", first_name="Tommy", second_name="Doherty")
+        user_two = TestUser.objects.create(username="tommye", first_name="Tommy", second_name="Einfield")
 
-    def test_error_on_update_does_not_change_markers(self):
+        # now do the update operation
+        user_two.second_name = "Doherty"
+        with self.assertRaises(IntegrityError):
+            user_two.save()
+
+    def test_error_on_update_does_not_change_entity(self):
         """
         Assert that when there is an error / exception raised as part of the
         update command, any markers which have been deleted or added are
@@ -278,11 +155,6 @@ class TestUniqueConstraints(TestCase):
 
         user.refresh_from_db()
         self.assertEqual(user.username, "AshtonGateEight")
-
-        # the unique markers should still ref the original unique value
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 1)
-        self.assertIn(_format_value_for_identifier("AshtonGateEight"), unique_markers[0].key.name)
 
     def test_bulk_update(self):
         """
@@ -306,6 +178,17 @@ class TestUniqueConstraints(TestCase):
     def test_error_with_bulk_update(self):
         # TODO
         pass
+        # user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
+        # user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
+
+        # with self.assertRaises(IntegrityError):
+        #     TestUser.objects.all().update(username="bill")
+
+        # user_one.refresh_from_db()
+        # user_two.refresh_from_db()
+
+        # self.assertEqual(user_one.username, "stevep")
+        # self.assertEqual(user_two.username, "joeb")
 
     def test_delete_clears_markers(self):
         """

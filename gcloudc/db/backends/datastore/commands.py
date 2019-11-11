@@ -665,18 +665,20 @@ class InsertCommand(object):
                     primary.key = primary.key.completed_key(
                         rpc._generate_id()
                     )
-                
+
+                # thanks to cloud datastore strong consistency, we can query
+                # for the relevant entities to enforce uniqueness
                 if must_handle_unique:
                     combinations = _unique_combinations(self.model, ignore_pk=True)
                     for combination in combinations:
                         query = rpc.query(kind=primary.kind)
                         for field in combination:
                             query.add_filter(field, '=', primary.get(field))
-                        
+
                         res = query.fetch(1)
                         if len(list(res)) > 0:
                             raise IntegrityError('Tried to INSERT violating a unique constraint')
-                            
+
                 rpc.put(primary)
                 new_key = primary.key
 
@@ -728,14 +730,6 @@ class InsertCommand(object):
                     # marker keys we would be trying to fetch / compare
                     if len(entities) > 1:
                         check_unique_markers_in_memory(self.model, entities)
-
-                    # # even for bulk insert we also need to do the full check, to
-                    # # query against unique markers created before the operation
-                    # for entity, _ in entities:
-                    #     new_marker_keys.extend(
-                    #         # this is executed as an independent transaction
-                    #         acquire_unique_markers(self.model, entity, self.connection)
-                    #     )
 
                 caching.add_entities_to_cache(
                     self.model,
@@ -1025,6 +1019,20 @@ class UpdateCommand(object):
                     value set
                 """
                 client = transaction._rpc(self.connection.alias)
+
+                if has_active_unique_constraints(self.model):
+                    combinations = _unique_combinations(self.model, ignore_pk=True)
+                    for combination in combinations:
+                        query = client.query(kind=primary.kind)
+                        # query.add_filter('')
+                        for field in combination:
+                            query.add_filter(field, '=', primary.get(field))
+
+                        res = query.fetch(1)
+                        stored = list(res)
+                        if len(stored) == 1 and stored[0].key != result.key:
+                            raise IntegrityError('Tried to UPDATE violating a unique constraint')
+
                 inserted_key = client.put(result)
                 if descendents:
                     for i, descendent in enumerate(descendents):
