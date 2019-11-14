@@ -608,7 +608,7 @@ class InsertCommand(object):
         self.model = model
         self.objs = objs
         self.connection = connection
-        self.namespace = connection.settings_dict.get("NAMESPACE", "")
+        self.namespace = connection.settings_dict.get("NAMESPACE")
         self.raw = raw
         self.fields = fields
 

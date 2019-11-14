@@ -340,7 +340,7 @@ class ContextStack(object):
                     # This assumes that all keys are in the same namespace,
                     # which is almost definitely
                     # going to be the case, but it feels a bit dirty
-                    namespace = keys[0].namespace or None
+                    namespace = keys[0].namespace
                     caching.remove_entities_from_cache_by_key(keys, namespace=namespace)
 
                 self.top.apply(to_apply)

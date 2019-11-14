@@ -50,7 +50,7 @@ class Transaction(object):
         Interface to the Datastore client Key factory.
         """
         assert("namespace" not in kwargs)
-        namespace = self._connection.settings_dict.get("NAMESPACE", "")
+        namespace = self._connection.settings_dict.get("NAMESPACE")
         kwargs["namespace"] = namespace
 
         parent = kwargs.get("parent")
