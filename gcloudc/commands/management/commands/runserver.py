@@ -20,7 +20,11 @@ def locate_runserver():
 
     for i in range(index + 1, len(APPS_TO_CHECK)):
         app_label = APPS_TO_CHECK[i]
-        command = load_command_class(app_label, "runserver")
+        try:
+            command = load_command_class(app_label, "runserver")
+        except ModuleNotFoundError:
+            continue
+
         if command:
             return command.__class__
     else:
