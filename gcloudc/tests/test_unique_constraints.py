@@ -160,35 +160,61 @@ class TestUniqueConstraints(TestCase):
         """
         Assert that updates via the QuerySet API handle uniques.
         """
-        TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
-        TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 4)
+        user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
+        user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
 
         # now do the update operation on the queryset
         TestUser.objects.all().update(first_name="lee")
 
-        unique_markers = get_kind_query("uniquemarker", keys_only=False)
-        self.assertEqual(len(unique_markers), 4)
-        for marker in unique_markers:
-            if "first_name" in marker.key.name:
-                # the named key should ref the new unique value
-                self.assertIn(_format_value_for_identifier("lee"), marker.key.name)
+        user_one.refresh_from_db()
+        user_two.refresh_from_db()
+
+        self.assertEqual(user_one.first_name, "lee")
+        self.assertEqual(user_two.first_name, "lee")
 
     def test_error_with_bulk_update(self):
-        # TODO
-        pass
-        # user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
-        # user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
+        user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
+        user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
 
+        with self.assertRaises(IntegrityError):
+            TestUser.objects.all().update(username="bill")
+
+        user_one.refresh_from_db()
+        user_two.refresh_from_db()
+
+        # in djangae (python 2) this doesn't work, user_two would end up
+        # with username=bill, which makes it non transactional on the group
+        self.assertEqual(user_one.username, "stevep")
+        self.assertEqual(user_two.username, "joeb")
+
+    def test_error_with_bulk_update_unique_together(self):
+        user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="mitchell")
+        user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="mitchell")
+
+        with self.assertRaises(IntegrityError):
+            TestUser.objects.all().update(first_name="lee")
+
+        user_one.refresh_from_db()
+        user_two.refresh_from_db()
+
+        # in djangae (python 2) this doesn't work, user_two would end up
+        # with username=bill, which makes it non transactional on the group
+        self.assertEqual(user_one.first_name, "steve")
+        self.assertEqual(user_two.first_name, "joe")
+
+    def test_500_limit(self):
+        for i in range(26):
+            username="stevep_{}".format(i)
+            first_name="steve_{}".format(i)
+            second_name="phillips_{}".format(i)
+            TestUser.objects.create(
+                username=username,
+                first_name=first_name,
+                second_name=second_name,
+            )
+
+        TestUser.objects.all().update(first_name="lee")
         # with self.assertRaises(IntegrityError):
-        #     TestUser.objects.all().update(username="bill")
-
-        # user_one.refresh_from_db()
-        # user_two.refresh_from_db()
-
-        # self.assertEqual(user_one.username, "stevep")
-        # self.assertEqual(user_two.username, "joeb")
 
     def test_delete_clears_markers(self):
         """

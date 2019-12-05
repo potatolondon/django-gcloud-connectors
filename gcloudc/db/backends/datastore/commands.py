@@ -20,11 +20,13 @@ from .constraints import (
     delete_unique_markers_for_entity,
     has_active_unique_constraints,
 )
+
 from .dbapi import NotSupportedError
 from .dnf import normalize_query
 from .formatting import generate_sql_representation
 from .query import transform_query
 from .query_utils import get_filter, has_filter
+from .transaction import TransactionFailedError
 from .unique_utils import query_is_unique, _unique_combinations
 from .utils import (
     MockInstance,
@@ -961,14 +963,6 @@ class UpdateCommand(object):
         return str(self).lower()
 
     def _update_entity(self, key):
-        # This is a list rather than a straight bool, because we need to pass
-        # by reference so we can set it in the nested function. 'global' doesnt
-        # work on nested functions
-        rollback_markers = [False]
-        acquired_markers = []
-        original = None
-
-        @transaction.atomic(cache_enabled=False)
         def update_txt():
             result = transaction._rpc(self.connection.alias).get(key)
             if result is None:
@@ -991,7 +985,7 @@ class UpdateCommand(object):
             # Convert the instance to an entity
             primary, descendents = django_instance_to_entities(
                 self.connection,
-                [x[0] for x in self.values],  # Pass in the fields that were updated
+                [x[0] for x in self.values], # Pass in the fields that were updated
                 True,
                 instance,
                 model=self.model,
@@ -1024,7 +1018,7 @@ class UpdateCommand(object):
                     combinations = _unique_combinations(self.model, ignore_pk=True)
                     for combination in combinations:
                         query = client.query(kind=primary.kind)
-                        # query.add_filter('')
+                        query.keys_only()
                         for field in combination:
                             query.add_filter(field, '=', primary.get(field))
 
@@ -1049,21 +1043,6 @@ class UpdateCommand(object):
             # this will be async as we're inside a transaction block
             perform_insert()
 
-            if has_active_unique_constraints(self.model):
-                # we keep a reference to any markers we added, so if the
-                # transaction fails on commit we can roll back these changes
-                acquired_markers = acquire_unique_markers(self.model, result, self.connection)
-
-                # note we are passing the old entity state and refetch=False
-                delete_unique_markers_for_entity(self.model, original, self.connection, refetch=False)
-
-                # If the rpc.Put() fails then the exception will only be raised when the
-                # transaction applies, which means that we will still get to here and will still have
-                # applied the marker changes (because they're in a nested, independent transaction).
-                # Hence we set this flag to tell us that we got this far and that we should roll them back.
-                rollback_markers[0] = True
-                # If something dies between here and the `return` statement then we'll have stale unique markers
-
             # Update the cache with the entity
             caching.add_entities_to_cache(
                 self.model,
@@ -1075,29 +1054,22 @@ class UpdateCommand(object):
             # Return true to indicate update success
             return True
 
-        try:
-            return update_txt()
-        except Exception:
-            # any exception raised inside the outer transaction will be rolled
-            # back (e.g. and attempt to update the main entity) - however we
-            # need to manually handle the nested, independent transactions
-            # which are used to update the markers, to mimic the behaviour of
-            # a single atomic block
-            if rollback_markers[0]:
-                # make sure all the markers for previous entity state reinstated
-                acquire_unique_markers(self.model, original, self.connection)
-
-                # remove all the markers we created before the exception
-                delete_unique_markers(acquired_markers, self.connection)
-            raise
+        return update_txt()
 
     def execute(self):
+        # TODO: add in-memory check to see if fields being updated are violating
+        # unique constraints on their own (e.g. bulk updating on a unique field
+        # or on all the fields in a unique_together combination)
+
+        @transaction.atomic(enable_cache=False)
+        def perform_update(results):
+            i = 0
+            for result in results:
+               if self._update_entity(result.key):
+                   i += 1
         self.select.execute()
 
-        i = 0
-        for result in self.select.results:
-            if self._update_entity(result.key):
-                # Only increment the count if we successfully updated
-                i += 1
-
-        return i
+        try:
+            return perform_update(list(self.select.results))
+        except TransactionFailedError:
+            raise IntegrityError("Trying to update too many entities")
