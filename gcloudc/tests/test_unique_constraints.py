@@ -149,7 +149,7 @@ class TestUniqueConstraints(TestCase):
         user = TestUserTwo.objects.create(username="AshtonGateEight")
 
         with sleuth.detonate("gcloudc.db.backends.datastore.transaction.Transaction.put", TransactionFailedError):
-            with self.assertRaises(TransactionFailedError):
+            with self.assertRaises(IntegrityError):
                 user.username = "Red Army"
                 user.save()
 

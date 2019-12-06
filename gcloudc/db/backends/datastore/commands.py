@@ -14,6 +14,7 @@ from google.cloud.datastore.query import Query
 from . import POLYMODEL_CLASS_ATTRIBUTE, meta_queries, transaction, utils
 from .caching import remove_entities_from_cache_by_key
 from .constraints import (
+    CONSTRAINT_VIOLATION_MSG,
     acquire_unique_markers,
     check_unique_markers_in_memory,
     delete_unique_markers,
@@ -602,6 +603,26 @@ class BulkInsertError(IntegrityError, NotSupportedError):
 class BulkDeleteError(IntegrityError, NotSupportedError):
     pass
 
+def perform_unique_checks(model, rpc, primary, test_fn):
+    combinations = _unique_combinations(model, ignore_pk=True)
+    for combination in combinations:
+        query = rpc.query(kind=primary.kind)
+
+        for field in combination:
+            value = primary.get(field)
+            if isinstance(value, list):
+                for item in value:
+                    has_filter = True
+                    query.add_filter(field, '=', item)
+            elif value is not None:
+                has_filter = True
+                query.add_filter(field, '=', value)
+
+        if len(query.filters):
+            res = query.fetch(1)
+            if test_fn(list(res)):
+                raise IntegrityError(CONSTRAINT_VIOLATION_MSG.format(model._meta.db_table, ", ".join(combination)))
+
 
 @python_2_unicode_compatible
 class InsertCommand(object):
@@ -668,18 +689,14 @@ class InsertCommand(object):
                         rpc._generate_id()
                     )
 
+                def test_fn(stored):
+                    return stored and len(stored) > 0
+
                 # thanks to cloud datastore strong consistency, we can query
                 # for the relevant entities to enforce uniqueness
                 if must_handle_unique:
-                    combinations = _unique_combinations(self.model, ignore_pk=True)
-                    for combination in combinations:
-                        query = rpc.query(kind=primary.kind)
-                        for field in combination:
-                            query.add_filter(field, '=', primary.get(field))
-
-                        res = query.fetch(1)
-                        if len(list(res)) > 0:
-                            raise IntegrityError('Tried to INSERT violating a unique constraint')
+                    test_fn = lambda stored: stored and len(stored) > 0
+                    perform_unique_checks(self.model, rpc, primary, test_fn)
 
                 rpc.put(primary)
                 new_key = primary.key
@@ -1014,18 +1031,11 @@ class UpdateCommand(object):
                 """
                 client = transaction._rpc(self.connection.alias)
 
-                if has_active_unique_constraints(self.model):
-                    combinations = _unique_combinations(self.model, ignore_pk=True)
-                    for combination in combinations:
-                        query = client.query(kind=primary.kind)
-                        query.keys_only()
-                        for field in combination:
-                            query.add_filter(field, '=', primary.get(field))
+                def test_fn(stored):
+                    return stored and len(stored) == 1 and stored[0].key != result.key
 
-                        res = query.fetch(1)
-                        stored = list(res)
-                        if len(stored) == 1 and stored[0].key != result.key:
-                            raise IntegrityError('Tried to UPDATE violating a unique constraint')
+                if has_active_unique_constraints(self.model):
+                    perform_unique_checks(self.model, client, primary, test_fn)
 
                 inserted_key = client.put(result)
                 self.results.append((result, None))
@@ -1073,13 +1083,14 @@ class UpdateCommand(object):
             for result in results:
                 if self._update_entity(result.key):
                     i += 1
-
             # due to the isolation of the datastore inside transactions we won't
             # find unique clashes as part of the bulk operation -
             # to avoid this we can do an in memory comparison on the
             # entities themselves
             if must_handle_unique:
                 check_unique_markers_in_memory(self.model, self.results)
+
+            return i
 
         self.select.execute()
 
