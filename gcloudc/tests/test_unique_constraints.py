@@ -177,22 +177,35 @@ class TestUniqueConstraints(TestCase):
         user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
 
         with self.assertRaises(IntegrityError):
+            TestUser.objects.all().update(username="stevep")
+
+        user_one.refresh_from_db()
+        user_two.refresh_from_db()
+
+        # in Djangae (python 2) this doesn't work, user_two would end up
+        # with username=bill, which makes it non transactional on the group
+        self.assertEqual(user_one.username, "stevep")
+        self.assertEqual(user_two.username, "joeb")
+
+    def test_error_with_bulk_update_in_memory(self):
+        user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
+        user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
+
+        with self.assertRaises(IntegrityError):
             TestUser.objects.all().update(username="bill")
 
         user_one.refresh_from_db()
         user_two.refresh_from_db()
 
-        # in djangae (python 2) this doesn't work, user_two would end up
-        # with username=bill, which makes it non transactional on the group
         self.assertEqual(user_one.username, "stevep")
         self.assertEqual(user_two.username, "joeb")
 
     def test_error_with_bulk_update_unique_together(self):
-        user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="mitchell")
-        user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="mitchell")
+        user_one = TestUser.objects.create(username="stevep", first_name="steve", second_name="phillips")
+        user_two = TestUser.objects.create(username="joeb", first_name="joe", second_name="burnell")
 
         with self.assertRaises(IntegrityError):
-            TestUser.objects.all().update(first_name="lee")
+            TestUser.objects.all().update(first_name="lee", second_name="bruce")
 
         user_one.refresh_from_db()
         user_two.refresh_from_db()
@@ -202,19 +215,49 @@ class TestUniqueConstraints(TestCase):
         self.assertEqual(user_one.first_name, "steve")
         self.assertEqual(user_two.first_name, "joe")
 
-    def test_500_limit(self):
-        for i in range(26):
-            username="stevep_{}".format(i)
-            first_name="steve_{}".format(i)
-            second_name="phillips_{}".format(i)
-            TestUser.objects.create(
-                username=username,
-                first_name=first_name,
-                second_name=second_name,
-            )
+    def test_error_with_bulk_update_unique_together_in_memory(self):
+        user_one = TestUser.objects.create(username="stevem", first_name="steve", second_name="mitchell")
+        user_two = TestUser.objects.create(username="joem", first_name="joe", second_name="mitchell")
 
-        TestUser.objects.all().update(first_name="lee")
-        # with self.assertRaises(IntegrityError):
+        with self.assertRaises(IntegrityError):
+            TestUser.objects.all().update(first_name="lee")
+
+        user_one.refresh_from_db()
+        user_two.refresh_from_db()
+
+        self.assertEqual(user_one.first_name, "steve")
+        self.assertEqual(user_two.first_name, "joe")
+
+    # def test_500_limit(self):
+    #     # TODO: datastore emulator seems to fail at the old 25 limit, update
+    #     # this to a bigger number (close but < 500) once it's fixed in the
+    #     # emulator
+    #     for i in range(25):
+    #         username="stevep_{}".format(i)
+    #         first_name="steve_{}".format(i)
+    #         second_name="phillips_{}".format(i)
+    #         TestUser.objects.create(
+    #             username=username,
+    #             first_name=first_name,
+    #             second_name=second_name,
+    #         )
+
+    #     TestUser.objects.all().update(first_name="lee")
+
+    #     for i in range(25, 501):
+    #         username="stevep_{}".format(i)
+    #         first_name="steve_{}".format(i)
+    #         second_name="phillips_{}".format(i)
+    #         TestUser.objects.create(
+    #             username=username,
+    #             first_name=first_name,
+    #             second_name=second_name,
+    #         )
+
+    #     # This should raise because of the 500 changes per transaction limit
+    #     with self.assertRaises(IntegrityError):
+    #         TestUser.objects.all().update(first_name="lee")
+
 
     def test_delete_clears_markers(self):
         """

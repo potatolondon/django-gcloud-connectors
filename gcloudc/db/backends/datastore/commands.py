@@ -952,7 +952,7 @@ class UpdateCommand(object):
         self.values = query.values
         self.connection = connection
         self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
-
+        self.results = []
     def __str__(self):
         return generate_sql_representation(self)
 
@@ -1028,6 +1028,8 @@ class UpdateCommand(object):
                             raise IntegrityError('Tried to UPDATE violating a unique constraint')
 
                 inserted_key = client.put(result)
+                self.results.append((result, None))
+
                 if descendents:
                     for i, descendent in enumerate(descendents):
                         descendents[i] = Entity(
@@ -1039,6 +1041,8 @@ class UpdateCommand(object):
                         )
                         descendents[i].update(descendent)
                     client.put_multi(descendents)
+
+
 
             # this will be async as we're inside a transaction block
             perform_insert()
@@ -1057,19 +1061,33 @@ class UpdateCommand(object):
         return update_txt()
 
     def execute(self):
-        # TODO: add in-memory check to see if fields being updated are violating
-        # unique constraints on their own (e.g. bulk updating on a unique field
-        # or on all the fields in a unique_together combination)
+        must_handle_unique = has_active_unique_constraints(self.model)
 
+        # TODO: potential optimisation - only use transaction if updating things
+        # that require unique checks. This could potentially open a can of worms
+        # but would have the benefit of removing any per-commit limits the datastore
+        # currently imposes on transactions
         @transaction.atomic(enable_cache=False)
         def perform_update(results):
             i = 0
             for result in results:
-               if self._update_entity(result.key):
-                   i += 1
+                if self._update_entity(result.key):
+                    i += 1
+
+            # due to the isolation of the datastore inside transactions we won't
+            # find unique clashes as part of the bulk operation -
+            # to avoid this we can do an in memory comparison on the
+            # entities themselves
+            if must_handle_unique:
+                check_unique_markers_in_memory(self.model, self.results)
+
         self.select.execute()
 
-        try:
-            return perform_update(list(self.select.results))
-        except TransactionFailedError:
-            raise IntegrityError("Trying to update too many entities")
+        if must_handle_unique:
+            combinations = _unique_combinations(self.model, ignore_pk=True)
+            updating_attributes = set([field.attname for field, _, _ in self.values])
+            for combination in combinations:
+                if set(combination) == updating_attributes:
+                    raise IntegrityError('UPDATE on {} field(s) would violate unique constraint'.format(combination))
+
+        return perform_update(list(self.select.results))
