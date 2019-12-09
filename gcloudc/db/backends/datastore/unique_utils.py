@@ -146,22 +146,6 @@ def unique_identifiers_from_entity(model, entity, ignore_pk=True, ignore_null_va
     return identifiers
 
 
-def _get_kind_from_named_marker_key(unique_marker_key):
-    """
-    Extracts and returns the table name prefix from a UniqueMarker named key.
-    """
-    return unique_marker_key.name.split("|")[0]
-
-
-def _get_unique_fields_from_named_marker_key(unique_marker_key):
-    """
-    Extracts and returns all the unique field names from a UniqueMarker
-    named key.
-    """
-    fields_and_values = unique_marker_key.name.split("|")[1:]
-    return [unique_field_name.split(":")[0] for unique_field_name in fields_and_values]
-
-
 def _unique_combinations(model, ignore_pk=False):
     """
     Returns an iterable of iterables to represent all the unique constraints

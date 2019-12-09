@@ -14,12 +14,11 @@ from google.cloud.datastore.query import Query
 from . import POLYMODEL_CLASS_ATTRIBUTE, meta_queries, transaction, utils
 from .caching import remove_entities_from_cache_by_key
 from .constraints import (
-    acquire_unique_markers,
+    CONSTRAINT_VIOLATION_MSG,
     check_unique_markers_in_memory,
-    delete_unique_markers,
-    delete_unique_markers_for_entity,
     has_active_unique_constraints,
 )
+
 from .dbapi import NotSupportedError
 from .dnf import normalize_query
 from .formatting import generate_sql_representation
@@ -593,6 +592,27 @@ def reserve_id(connection, kind, id_or_name, namespace):
     gclient.reserve_ids(gclient.key(kind, id_or_name, namespace=namespace), 1)
 
 
+def perform_unique_checks(model, rpc, primary, test_fn):
+    combinations = _unique_combinations(model, ignore_pk=True)
+    for combination in combinations:
+        query = rpc.query(kind=primary.kind)
+
+        for field in combination:
+            col_name = model._meta.get_field(field).column
+            value = primary.get(col_name)
+            if isinstance(value, list):
+                for item in value:
+                    query.add_filter(col_name, '=', item)
+            elif value is not None:
+                query.add_filter(col_name, '=', value)
+
+        # only perform the query if there are filters on it
+        if len(query.filters):
+            res = list(query.fetch(1))
+            if test_fn(res):
+                raise IntegrityError(CONSTRAINT_VIOLATION_MSG.format(model._meta.db_table, ", ".join(combination)))
+
+
 class BulkInsertError(IntegrityError, NotSupportedError):
     pass
 
@@ -658,12 +678,18 @@ class InsertCommand(object):
         def perform_insert(entities):
             results = []
             rpc = transaction._rpc(self.connection.alias)
+            must_handle_unique = has_active_unique_constraints(self.model)
 
             for primary, descendents in entities:
                 if primary.key.is_partial:
                     primary.key = primary.key.completed_key(
                         rpc._generate_id()
                     )
+
+                # thanks to cloud firestore in datastore mode strong consistency
+                # we can query for the relevant entities to enforce uniqueness
+                if must_handle_unique:
+                    perform_unique_checks(self.model, rpc, primary, test_fn=lambda stored: stored and len(stored) > 0)
 
                 rpc.put(primary)
                 new_key = primary.key
@@ -682,74 +708,39 @@ class InsertCommand(object):
                 results.append(new_key)
             return results
 
+        @transaction.atomic(enable_cache=False)
         def insert_chunk(keys, entities):
+            for key in keys:
+                # sanity check the key isn't already taken
+                if check_existence and key is not None:
+                    if utils.key_exists(self.connection.alias, key):
+                        raise IntegrityError("Tried to INSERT with existing key")
 
-            # we need to keep track of all the unique markers created as part
-            # of independent nested transactions, so we rollback at any point
-            # and essentially mimic the behaviour of a single atomic transaction
-            new_marker_keys = []
+                    # quick validation of the ID value
+                    id_or_name = key.id_or_name
+                    if isinstance(id_or_name, str) and id_or_name.startswith("__"):
+                        raise NotSupportedError("Datastore ids cannot start with __. Id was {}".format(id_or_name))
 
-            @transaction.atomic(enable_cache=False)
-            def insertion_txt():
-                for key in keys:
+                    # notify App Engine of any keys we're specifying intentionally
+                    reserve_id(self.connection, key.kind, key.id_or_name, self.namespace)
 
-                    # sanity check the key isn't already taken
-                    if check_existence and key is not None:
-                        if utils.key_exists(self.connection.alias, key):
-                            raise IntegrityError("Tried to INSERT with existing key")
+            results = perform_insert(entities)
 
-                        # quick validation of the ID value
-                        id_or_name = key.id_or_name
-                        if isinstance(id_or_name, str) and id_or_name.startswith("__"):
-                            raise NotSupportedError("Datastore ids cannot start with __. Id was {}".format(id_or_name))
+            if has_active_unique_constraints(self.model):
+                # if we're doing a bulk insert, due to the isolation of the
+                # datastore inside transactions we won't find duplicate entities
+                # to avoid this we can do an in memory comparison instead
+                if len(entities) > 1:
+                    check_unique_markers_in_memory(self.model, entities)
 
-                        # notify App Engine of any keys we're specifying intentionally
-                        reserve_id(self.connection, key.kind, key.id_or_name, self.namespace)
+            caching.add_entities_to_cache(
+                self.model,
+                [x[0] for x in entities],
+                caching.CachingSituation.DATASTORE_GET_PUT,
+                self.namespace
+            )
 
-                results = perform_insert(entities)
-
-                if has_active_unique_constraints(self.model):
-
-                    # if we're doing a bulk insert, due to the isolation of the
-                    # datastore inside transactions we won't find duplicate unique
-                    # marker keys created as part of the bulk operation -
-                    # to avoid this we can do an in memory comparison on the
-                    # marker keys we would be trying to fetch / compare
-                    if len(entities) > 1:
-                        check_unique_markers_in_memory(self.model, entities)
-
-                    # even for bulk insert we also need to do the full check, to
-                    # query against unique markers created before the operation
-                    for entity, _ in entities:
-                        new_marker_keys.extend(
-                            # this is executed as an independent transaction
-                            acquire_unique_markers(self.model, entity, self.connection)
-                        )
-
-                caching.add_entities_to_cache(
-                    self.model,
-                    [x[0] for x in entities],
-                    caching.CachingSituation.DATASTORE_GET_PUT,
-                    self.namespace
-                )
-
-                return results
-
-            try:
-                return insertion_txt()
-            except Exception:
-                # There are 3 possible reasons why we've ended up here:
-                # 1. The put() failed, but because it's a transaction, the
-                #    exception isn't raised until the END of the transaction block.
-                # 2. Some of the markers were acquired, but then we hit a unique
-                #    constraint conflict which raised an inner exception, and so
-                #    the outer transaction was rolled back.
-                # 3. Something else went wrong...!
-                # In any of these cases, we (may) have acquired markers via
-                # nested, independent transaction(s), and so we need to release
-                # them to mimic the behaviour of a single atomic block
-                delete_unique_markers(new_marker_keys, self.connection)
-                raise
+            return results
 
         return insert_chunk(self.included_keys, self.entities)
 
@@ -768,8 +759,7 @@ class DeleteCommand(object):
     Delete an entity / multiple entities.
 
     Limits imposed by the Firestore in Datastore mode (such as 500 write operations
-    per batch) and the backend internal implementation details (such as removing
-    related unique markers) are handled under the hood.
+    per batch) and the backend internal implementation details are handled under the hood.
     """
 
     def __init__(self, connection, query):
@@ -798,9 +788,6 @@ class DeleteCommand(object):
             execute a keys_only query to find the entities that match the query, then send
             those keys to delete().
 
-            And then there might be constraints... in which case we need to grab the entity
-            in its entirety, release any constraints and then delete the entity.
-
             And then there are polymodels (model inheritence) which means we might not even be
             deleting the entity after all, only deleting some of the fields from it.
 
@@ -808,26 +795,21 @@ class DeleteCommand(object):
             500, each entity in the batch has its polymodel fields wiped out
             (if necessary) and then we do either a put() or delete() all inside a transaction.
 
-            Oh, and we wipe out memcache and delete the constraints in an independent transaction.
+            Oh, and we wipe out memcache in an independent transaction.
 
             Things to improve:
 
-             - Delete the constraints in a background thread. We don't need to wait for them, and
-             really, we don't want the non-deletion of them to affect the deletion of the entity.
-             Lingering markers are handled automatically they just case a small performance hit on
-             write.
-             - Check the entity matches the query still (there's a fixme there)
+            - Check the entity matches the query still (there's a fixme there)
         """
         from .indexing import indexers_for_model
-        from .constraints import has_active_unique_constraints
 
         @transaction.atomic()
-        def delete_batch(key_slice, constraints_enabled=False):
+        def delete_batch(key_slice):
             """
                 Batch fetch entities, wiping out any polymodel fields if
                 necessary, before deleting the entities by key.
 
-                Any memcache references and unique markers are also removed.
+                Any memcache references are also removed.
             """
             entities_to_delete = []
             entities_to_update = []
@@ -847,15 +829,6 @@ class DeleteCommand(object):
 
                 if not entity.get("class"):
                     entities_to_delete.append(entity)
-                    if constraints_enabled:
-                        try:
-                            delete_unique_markers_for_entity(self.model, entity, self.connection)
-                        except Exception:
-                            # failure to delete a unique marker should not
-                            # prohibit the execution of actual entity deletion
-                            # as stale markers are accounted for in puts(),
-                            # there is just a small overhead at write time
-                            pass
                 else:
                     entities_to_update.append(entity)
                 updated_keys.append(entity)
@@ -886,26 +859,17 @@ class DeleteCommand(object):
         self.select.execute()
         key_ids = [x[self.model._meta.pk.name] for x in self.select.results]
 
-        # if unique constraints are active, we have to take some additional
-        # steps to make sure all references are cleaned up as we go. We do
-        # this here to avoid some overhead in the batch operation loop
-        model_has_active_constraints = has_active_unique_constraints(self.model)
-
-        # for now we can only process 500 / (number of marker to delete + 1)
+        # for now we can only process 500 entities
         # otherwise we need to handle rollback of independent transactions
-        # and race conditions between markers being deleted and restored...
-        max_batch_size = (
-            transaction.TRANSACTION_ENTITY_LIMIT
-            if not model_has_active_constraints
-            else transaction.TRANSACTION_ENTITY_LIMIT / (len(_unique_combinations(self.model, ignore_pk=True)) + 1)
-        )
+        # and race conditions between items being deleted and restored...
+        max_batch_size = transaction.TRANSACTION_ENTITY_LIMIT
 
         if len(key_ids) > max_batch_size:
             raise BulkDeleteError(
                 "Bulk deletes for {} can only delete {} instances per batch".format(self.model, max_batch_size)
             )
 
-        return delete_batch(key_ids, constraints_enabled=model_has_active_constraints)
+        return delete_batch(key_ids)
 
     def lower(self):
         """
@@ -945,6 +909,7 @@ class UpdateCommand(object):
         self.values = query.values
         self.connection = connection
         self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.results = []
 
     def __str__(self):
         return generate_sql_representation(self)
@@ -956,14 +921,6 @@ class UpdateCommand(object):
         return str(self).lower()
 
     def _update_entity(self, key):
-        # This is a list rather than a straight bool, because we need to pass
-        # by reference so we can set it in the nested function. 'global' doesnt
-        # work on nested functions
-        rollback_markers = [False]
-        acquired_markers = []
-        original = None
-
-        @transaction.atomic(cache_enabled=False)
         def update_txt():
             result = transaction._rpc(self.connection.alias).get(key)
             if result is None:
@@ -1014,7 +971,16 @@ class UpdateCommand(object):
                     value set
                 """
                 client = transaction._rpc(self.connection.alias)
+
+                def test_fn(stored):
+                    return stored and len(stored) == 1 and stored[0].key != result.key
+
+                if has_active_unique_constraints(self.model):
+                    perform_unique_checks(self.model, client, primary, test_fn)
+
                 inserted_key = client.put(result)
+                self.results.append((result, None))
+
                 if descendents:
                     for i, descendent in enumerate(descendents):
                         descendents[i] = Entity(
@@ -1030,21 +996,6 @@ class UpdateCommand(object):
             # this will be async as we're inside a transaction block
             perform_insert()
 
-            if has_active_unique_constraints(self.model):
-                # we keep a reference to any markers we added, so if the
-                # transaction fails on commit we can roll back these changes
-                acquired_markers = acquire_unique_markers(self.model, result, self.connection)
-
-                # note we are passing the old entity state and refetch=False
-                delete_unique_markers_for_entity(self.model, original, self.connection, refetch=False)
-
-                # If the rpc.Put() fails then the exception will only be raised when the
-                # transaction applies, which means that we will still get to here and will still have
-                # applied the marker changes (because they're in a nested, independent transaction).
-                # Hence we set this flag to tell us that we got this far and that we should roll them back.
-                rollback_markers[0] = True
-                # If something dies between here and the `return` statement then we'll have stale unique markers
-
             # Update the cache with the entity
             caching.add_entities_to_cache(
                 self.model,
@@ -1056,29 +1007,42 @@ class UpdateCommand(object):
             # Return true to indicate update success
             return True
 
-        try:
-            return update_txt()
-        except Exception:
-            # any exception raised inside the outer transaction will be rolled
-            # back (e.g. and attempt to update the main entity) - however we
-            # need to manually handle the nested, independent transactions
-            # which are used to update the markers, to mimic the behaviour of
-            # a single atomic block
-            if rollback_markers[0]:
-                # make sure all the markers for previous entity state reinstated
-                acquire_unique_markers(self.model, original, self.connection)
-
-                # remove all the markers we created before the exception
-                delete_unique_markers(acquired_markers, self.connection)
-            raise
+        return update_txt()
 
     def execute(self):
+        must_handle_unique = has_active_unique_constraints(self.model)
+
+        # TODO: potential optimisation - only use transaction if updating things
+        # that require unique checks. This could potentially open a can of worms
+        # but would have the benefit of removing any per-commit limits the datastore
+        # currently imposes on transactions
+        @transaction.atomic(enable_cache=False)
+        def perform_update(results):
+            i = 0
+            for result in results:
+                if self._update_entity(result.key):
+                    i += 1
+
+            # due to the isolation of the datastore inside transactions we won't
+            # find unique clashes as part of the bulk operation. To avoid this
+            # we can do an in memory comparison on the entities themselves
+            if must_handle_unique:
+                check_unique_markers_in_memory(self.model, self.results)
+
+            return i
+
         self.select.execute()
+        results = list(self.select.results)
 
-        i = 0
-        for result in self.select.results:
-            if self._update_entity(result.key):
-                # Only increment the count if we successfully updated
-                i += 1
+        # optimisation: if update is being performed on more than 1 entity,
+        # check that the fields in the update are not, on their own, one
+        # of the unique constraint combination - otherwise, it means a unique
+        # constraint would be violated and there would be no point in continuing
+        if len(results) > 1 and must_handle_unique:
+            combinations = _unique_combinations(self.model, ignore_pk=True)
+            updating_attributes = set([field.attname for field, _, _ in self.values])
+            for combination in combinations:
+                if set(combination) == updating_attributes:
+                    raise IntegrityError('UPDATE on {} field(s) violates unique constraint'.format(combination))
 
-        return i
+        return perform_update(results)

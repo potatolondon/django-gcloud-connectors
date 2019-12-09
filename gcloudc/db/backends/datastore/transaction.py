@@ -360,7 +360,7 @@ class AtomicDecorator(context_decorator.ContextDecorator):
                 else:
                     try:
                         transaction._datastore_transaction.commit()
-                    except exceptions.GoogleAPIError:
+                    except exceptions.GoogleCloudError:
                         raise TransactionFailedError()
         finally:
             if isinstance(transaction, (IndependentTransaction, NormalTransaction)):

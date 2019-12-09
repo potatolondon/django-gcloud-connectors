@@ -819,45 +819,6 @@ class ConstraintTests(TestCase):
         self.assertRaises(ModelWithUniques.DoesNotExist, ModelWithUniques.objects.get, name="Two")
         self.assertEqual(instance, ModelWithUniques.objects.get(name="One"))
 
-    def test_update_updates_markers(self):
-        rpc = transaction._rpc(default_connection.alias)
-        initial_count = count_query(rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE))
-
-        instance = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            1,
-            count_query(rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE)) - initial_count
-        )
-
-        qry = rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE, order=("-updated_at",))
-        marker = [x for x in qry.fetch()][0]
-        # Make sure we assigned the instance
-        self.assertEqual(
-            marker["instance"],
-            rpc.key(instance._meta.db_table, instance.pk)
-        )
-
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One".encode("ascii")).hexdigest())
-        self.assertEqual(expected_marker, marker.key.id_or_name)
-
-        instance.name = "Two"
-        instance.save()
-
-        self.assertEqual(
-            1,
-            count_query(rpc.query(kind=UNIQUE_MARKER_KIND, namespace=DEFAULT_NAMESPACE)) - initial_count
-        )
-        marker = [x for x in qry.fetch()][0]
-        # Make sure we assigned the instance
-        self.assertEqual(
-            marker["instance"],
-            rpc.key(instance._meta.db_table, instance.pk)
-        )
-
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("Two".encode("ascii")).hexdigest())
-        self.assertEqual(expected_marker, marker.key.id_or_name)
-
     def test_conflicting_insert_throws_integrity_error(self):
         try:
             constraints.UNOWNED_MARKER_TIMEOUT_IN_SECONDS = 0
