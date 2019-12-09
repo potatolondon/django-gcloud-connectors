@@ -609,18 +609,20 @@ def perform_unique_checks(model, rpc, primary, test_fn):
         query = rpc.query(kind=primary.kind)
 
         for field in combination:
-            value = primary.get(field)
+            col_name = model._meta.get_field(field).column
+            value = primary.get(col_name)
             if isinstance(value, list):
                 for item in value:
                     has_filter = True
-                    query.add_filter(field, '=', item)
+                    query.add_filter(col_name, '=', item)
             elif value is not None:
                 has_filter = True
-                query.add_filter(field, '=', value)
+                query.add_filter(col_name, '=', value)
 
+        # only perform the query if there are filters on it
         if len(query.filters):
-            res = query.fetch(1)
-            if test_fn(list(res)):
+            res = list(query.fetch(1))
+            if test_fn(res):
                 raise IntegrityError(CONSTRAINT_VIOLATION_MSG.format(model._meta.db_table, ", ".join(combination)))
 
 
@@ -1093,12 +1095,12 @@ class UpdateCommand(object):
             return i
 
         self.select.execute()
-
-        if must_handle_unique:
+        results = list(self.select.results)
+        if len(results) > 1 and must_handle_unique:
             combinations = _unique_combinations(self.model, ignore_pk=True)
             updating_attributes = set([field.attname for field, _, _ in self.values])
             for combination in combinations:
                 if set(combination) == updating_attributes:
                     raise IntegrityError('UPDATE on {} field(s) would violate unique constraint'.format(combination))
 
-        return perform_update(list(self.select.results))
+        return perform_update(results)
