@@ -1,12 +1,11 @@
 import sleuth
+from unittest import skip
 
 from django.db import connection
 from django.db.utils import IntegrityError
 from django.test.utils import override_settings
 
-from gcloudc.db.backends.datastore.unique_utils import _format_value_for_identifier
 from gcloudc.db.backends.datastore.transaction import TransactionFailedError
-from google.cloud.datastore.key import Key
 
 from . import TestCase
 
@@ -142,14 +141,12 @@ class TestUniqueConstraints(TestCase):
     def test_error_on_update_does_not_change_entity(self):
         """
         Assert that when there is an error / exception raised as part of the
-        update command, any markers which have been deleted or added are
-        rolled back, such that the previous state before the operation
-        is maintained.
+        update command, the entity is rolled back to its originial state.
         """
         user = TestUserTwo.objects.create(username="AshtonGateEight")
 
         with sleuth.detonate("gcloudc.db.backends.datastore.transaction.Transaction.put", TransactionFailedError):
-            with self.assertRaises(IntegrityError):
+            with self.assertRaises(TransactionFailedError):
                 user.username = "Red Army"
                 user.save()
 
@@ -228,50 +225,36 @@ class TestUniqueConstraints(TestCase):
         self.assertEqual(user_one.first_name, "steve")
         self.assertEqual(user_two.first_name, "joe")
 
-    # def test_500_limit(self):
-    #     # TODO: datastore emulator seems to fail at the old 25 limit, update
-    #     # this to a bigger number (close but < 500) once it's fixed in the
-    #     # emulator
-    #     for i in range(25):
-    #         username="stevep_{}".format(i)
-    #         first_name="steve_{}".format(i)
-    #         second_name="phillips_{}".format(i)
-    #         TestUser.objects.create(
-    #             username=username,
-    #             first_name=first_name,
-    #             second_name=second_name,
-    #         )
+    # see https://github.com/googleapis/google-cloud-python/issues/9921
+    @skip("This test should (probably) not fail once the emulator bug is fixed")
+    def test_500_limit(self):
+        # TODO: datastore emulator seems to fail at the old 25 limit, update
+        # this test once emulator issue is addressed
+        for i in range(25):
+            username = "stevep_{}".format(i)
+            first_name = "steve_{}".format(i)
+            second_name = "phillips_{}".format(i)
+            TestUser.objects.create(
+                username=username,
+                first_name=first_name,
+                second_name=second_name,
+            )
 
-    #     TestUser.objects.all().update(first_name="lee")
+        TestUser.objects.all().update(first_name="lee")
 
-    #     for i in range(25, 501):
-    #         username="stevep_{}".format(i)
-    #         first_name="steve_{}".format(i)
-    #         second_name="phillips_{}".format(i)
-    #         TestUser.objects.create(
-    #             username=username,
-    #             first_name=first_name,
-    #             second_name=second_name,
-    #         )
+        for i in range(25, 501):
+            username = "stevep_{}".format(i)
+            first_name = "steve_{}".format(i)
+            second_name = "phillips_{}".format(i)
+            TestUser.objects.create(
+                username=username,
+                first_name=first_name,
+                second_name=second_name,
+            )
 
-    #     # This should raise because of the 500 changes per transaction limit
-    #     with self.assertRaises(IntegrityError):
-    #         TestUser.objects.all().update(first_name="lee")
-
-
-    def test_delete_clears_markers(self):
-        """
-        Any markers associated with a given entity should be purged when
-        the entity is deleted (via the ORM).
-        """
-        user = TestUserTwo.objects.create(username="Mickey Bell")
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)
-
-        user.delete()
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 0)
+        # This should raise because of the 500 changes per transaction limit
+        with self.assertRaises(IntegrityError):
+            TestUser.objects.all().update(first_name="lee")
 
     def test_bulk_delete_fails_if_limit_exceeded(self):
         """
@@ -288,13 +271,9 @@ class TestUniqueConstraints(TestCase):
 
     def test_delete_entity_fails(self):
         """
-        Assert that if the entity delete operation fails, any related
-        UniqueMarkers which have been deleted are rolled back.
+        Assert that if the entity delete operation fails, the user is not deleted.
         """
         user = TestUserTwo.objects.create(username="Mickey Bell")
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)
 
         with sleuth.detonate(
             "gcloudc.db.backends.datastore.commands.remove_entities_from_cache_by_key", TransactionFailedError
@@ -305,31 +284,3 @@ class TestUniqueConstraints(TestCase):
         # the entity in question should not have been deleted, as error in the
         # transactions atomic block should revert all changes
         user.refresh_from_db()
-
-        # there should still be one unique marker left as the operation failed
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)
-
-    def test_delete_marker_fails(self):
-        """
-        Assert that if there is an exception raised attempting to delete
-        a unique marker, that does not impact the core delete operation.
-        """
-        user = TestUserTwo.objects.create(username="Mickey Bell")
-
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)
-
-        with sleuth.detonate(
-            "gcloudc.db.backends.datastore.commands.delete_unique_markers_for_entity", TransactionFailedError
-        ):
-            # we catch the transaction error to facilitate this behaviour
-            user.delete()
-
-        # the entity in question should be deleted despite the error
-        with self.assertRaises(TestUserTwo.DoesNotExist):
-            user.refresh_from_db()
-
-        # the marker will still be there but thats ok!
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 1)

@@ -278,11 +278,9 @@ class DatabaseOperations(BaseDatabaseOperations):
             if [y for y in tables if x.startswith("_djangae_idx_{}".format(y))]
         ]
 
-        unique_markers_table = "uniquemarker"
-
         return [
             FlushCommand(table, self.connection)
-            for table in tables + additional_djangaeidx_tables + [unique_markers_table]
+            for table in tables + additional_djangaeidx_tables
         ]
 
     def prep_lookup_key(self, model, value, field):
