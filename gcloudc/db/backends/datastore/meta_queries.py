@@ -333,7 +333,13 @@ class QueryByKeys(object):
                 # ancestor queries (to stay consistent) otherwise, we just do a
                 # datastore Get, but this will return extra data over the RPC
                 to_fetch = (offset or 0) + limit if limit else None
-                additional_cols = set([x[0] for x in self.ordering if x[0] not in base_query.projection])
+
+                # strip the optional "-" prefix from order (indicating descending order)
+                additional_cols = set([
+                    x if x[0] != "-" else x[1:]
+                    for x in self.ordering
+                    if x not in base_query.projection
+                ])
 
                 multi_query = []
                 orderings = base_query.order
