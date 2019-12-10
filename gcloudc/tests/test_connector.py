@@ -114,27 +114,28 @@ class BackendTests(TestCase):
     def test_entity_matches_query(self):
         rpc = transaction._rpc(default_connection.alias)
 
-        entity = Entity("test_model")
+        entity = Entity(rpc.key("test_model"))
         entity["name"] = "Charlie"
         entity["age"] = 22
 
         query = rpc.query(kind="test_model")
-        query["name ="] = "Charlie"
+        query.add_filter("name", "=", "Charlie")
         self.assertTrue(entity_matches_query(entity, query))
 
-        query["age >="] = 5
+        query = rpc.query(kind="test_model")
+        query.add_filter("age", ">=", 5)
         self.assertTrue(entity_matches_query(entity, query))
-        del query["age >="]
 
-        query["age <"] = 22
+        query = rpc.query(kind="test_model")
+        query.add_filter("age", "<", 22)
         self.assertFalse(entity_matches_query(entity, query))
-        del query["age <"]
 
-        query["age <="] = 22
+        query = rpc.query(kind="test_model")
+        query.add_filter("age", "<=", 22)
         self.assertTrue(entity_matches_query(entity, query))
-        del query["age <="]
 
-        query["name ="] = "Fred"
+        query = rpc.query(kind="test_model")
+        query.add_filter("name", "=", "Fred")
         self.assertFalse(entity_matches_query(entity, query))
 
         # If the entity has a list field, then if any of them match the
