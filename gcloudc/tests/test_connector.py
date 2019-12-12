@@ -1262,13 +1262,13 @@ class EdgeCaseTests(TestCase):
 
         self.assertEqual(0, qs.count())
 
-        TestUser.objects.create(username="Hello")
+        TestUser.objects.create(username="Hello", first_name="A")
         self.assertEqual(1, qs.count())
 
-        TestUser.objects.create(username="Goodbye")
+        TestUser.objects.create(username="Goodbye", first_name="B")
         self.assertEqual(2, qs.count())
 
-        TestUser.objects.create(username="Hello and Goodbye")
+        TestUser.objects.create(username="Hello and Goodbye", first_name="C")
         self.assertEqual(3, qs.count())
 
     def test_multi_table_inheritance(self):
