@@ -328,6 +328,10 @@ def lt(x, y):
         return True
     elif x is not None and y is None:
         return False
+    elif isinstance(x, Key) and isinstance(y, Key):
+        lhs = tuple([x.namespace] + list(x.flat_path))
+        rhs = tuple([y.namespace] + list(y.flat_path))
+        return lhs < rhs
     else:
         return x < y
 
@@ -339,6 +343,10 @@ def gt(x, y):
         return False
     elif x is not None and y is None:
         return True
+    elif isinstance(x, Key) and isinstance(y, Key):
+        lhs = tuple([x.namespace] + list(x.flat_path))
+        rhs = tuple([y.namespace] + list(y.flat_path))
+        return lhs > rhs
     else:
         return x > y
 
