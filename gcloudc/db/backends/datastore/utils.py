@@ -322,6 +322,8 @@ def key_exists(connection, key):
 
 
 def lt(x, y):
+    if x is None and y is None:
+        return False
     if x is None and y is not None:
         return True
     elif x is not None and y is None:
@@ -331,6 +333,8 @@ def lt(x, y):
 
 
 def gt(x, y):
+    if x is None and y is None:
+        return False
     if x is None and y is not None:
         return False
     elif x is not None and y is None:
