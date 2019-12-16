@@ -54,6 +54,7 @@ from gcloudc.db.backends.datastore.utils import (
 )
 from gcloudc.db.decorators import disable_cache
 from gcloudc.db.backends.datastore import indexing
+from gcloudc.db.backends.datastore.unique_utils import unique_identifiers_from_entity, _unique_combinations
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
@@ -66,6 +67,7 @@ from .models import (
     ModelWithDates,
     ModelWithNullableCharField,
     ModelWithUniques,
+    ModelWithUniquesOnForeignKey,
     MultiTableChildOne,
     MultiTableChildTwo,
     MultiTableParent,
@@ -922,14 +924,16 @@ class ConstraintTests(TestCase):
     def test_unique_combinations_are_returned_correctly(self):
         combos_one = _unique_combinations(ModelWithUniquesOnForeignKey, ignore_pk=True)
         combos_two = _unique_combinations(ModelWithUniquesOnForeignKey, ignore_pk=False)
+        rpc = transaction._rpc(default_connection.alias)
 
         self.assertEqual([['name', 'related_name'], ['name'], ['related_name']], combos_one)
         self.assertEqual([['name', 'related_name'], ['id'], ['name'], ['related_name']], combos_two)
 
         class Entity(dict):
             def __init__(self, model, id):
-                self._key = rpc.Key.from_path(model, id, namespace=DEFAULT_NAMESPACE)
+                self._key = rpc.key(model, id)
 
+            @property
             def key(self):
                 return self._key
 
@@ -937,13 +941,13 @@ class ConstraintTests(TestCase):
         e1["name"] = "One"
         e1["related_name_id"] = 1
 
-        ids_one = unique_identifiers_from_entity(ModelWithUniquesOnForeignKey, e1)
+        ids_one = unique_identifiers_from_entity(ModelWithUniquesOnForeignKey, e1, ignore_pk=False)
 
         self.assertItemsEqual([
-            u'djangae_modelwithuniquesonforeignkey|id:1',
-            u'djangae_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd',
-            u'djangae_modelwithuniquesonforeignkey|related_name_id:1',
-            u'djangae_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd|related_name_id:1'
+            u'tests_modelwithuniquesonforeignkey|id:1',
+            u'tests_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd',
+            u'tests_modelwithuniquesonforeignkey|related_name_id:1',
+            u'tests_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd|related_name_id:1'
         ], ids_one)
 
     def test_error_on_update_doesnt_change_markers(self):
