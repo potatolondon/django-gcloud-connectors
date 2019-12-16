@@ -638,8 +638,10 @@ class BackendTests(TestCase):
         The returned datetime and time values should include microseconds.
         See issue #707.
         """
+        from django.utils.timezone import make_aware
+
         t = datetime.time(22, 13, 50, 541022)
-        dt = datetime.datetime(2016, 5, 27, 18, 40, 12, 927371)
+        dt = make_aware(datetime.datetime(2016, 5, 27, 18, 40, 12, 927371))
         NullDate.objects.create(time=t, datetime=dt)
         result = list(NullDate.objects.all().values_list('time', 'datetime'))
         expected = [(t, dt)]

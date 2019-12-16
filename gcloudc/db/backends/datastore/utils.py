@@ -454,7 +454,7 @@ def ensure_datetime(value):
         it returns them as unix timestamps in microseconds!!
     """
     if isinstance(value, int):
-        return datetime.fromtimestamp(value / 1e6)
+        return datetime.utcfromtimestamp(value / 1e6)
     return value
 
 
