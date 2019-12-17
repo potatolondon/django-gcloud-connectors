@@ -856,39 +856,27 @@ class ConstraintTests(TestCase):
         self.assertEqual(instance, ModelWithUniques.objects.get(name="One"))
 
     def test_conflicting_insert_throws_integrity_error(self):
-        try:
-            constraints.UNOWNED_MARKER_TIMEOUT_IN_SECONDS = 0
+        ModelWithUniques.objects.create(name="One")
+
+        with self.assertRaises(IntegrityError):
             ModelWithUniques.objects.create(name="One")
 
-            with self.assertRaises(IntegrityError):
-                ModelWithUniques.objects.create(name="One")
+        # An insert with a specified ID enters a different code path
+        # so we need to ensure it works
+        ModelWithUniques.objects.create(id=555, name="Two")
 
-            # An insert with a specified ID enters a different code path
-            # so we need to ensure it works
-            ModelWithUniques.objects.create(id=555, name="Two")
+        with self.assertRaises(IntegrityError):
+            ModelWithUniques.objects.create(name="Two")
 
-            with self.assertRaises(IntegrityError):
-                ModelWithUniques.objects.create(name="Two")
+        # Make sure that bulk create works properly
+        ModelWithUniques.objects.bulk_create([
+            ModelWithUniques(name="Three"),
+            ModelWithUniques(name="Four"),
+            ModelWithUniques(name="Five"),
+        ])
 
-            # Make sure that bulk create works properly
-            ModelWithUniques.objects.bulk_create([
-                ModelWithUniques(name="Three"),
-                ModelWithUniques(name="Four"),
-                ModelWithUniques(name="Five"),
-            ])
-
-            with self.assertRaises(IntegrityError):
-                ModelWithUniques.objects.create(name="Four")
-
-            with self.assertRaises(NotSupportedError):
-                # Make sure bulk creates are limited when there are unique constraints
-                # involved
-                ModelWithUniques.objects.bulk_create(
-                    [ModelWithUniques(name=str(x)) for x in range(26)]
-                )
-
-        finally:
-            constraints.UNOWNED_MARKER_TIMEOUT_IN_SECONDS = 5
+        with self.assertRaises(IntegrityError):
+            ModelWithUniques.objects.create(name="Four")
 
     def test_integrity_error_message_correct(self):
         """ Check that the IntegrityError messages mentions the correct field(s). """
