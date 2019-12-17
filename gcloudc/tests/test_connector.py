@@ -1067,17 +1067,6 @@ class ConstraintTests(TestCase):
         self.assertEqual(instance1.name, instance2.name)
         self.assertFalse(instance1 == instance2)
 
-    @override_settings(DJANGAE_DISABLE_CONSTRAINT_CHECKS=True)
-    def test_constraints_can_be_enabled_per_model(self):
-
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-        ModelWithUniquesAndOverride.objects.create(name="One")
-
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
     def test_list_field_unique_constaints(self):
         instance1 = UniqueModel.objects.create(unique_field=1, unique_combo_one=1, unique_list_field=["A", "C"])
 

@@ -40,9 +40,6 @@ class TestUser(models.Model):
 class TestUserTwo(models.Model):
     username = models.CharField(max_length=32, unique=True)
 
-    class Djangae:
-        enforce_constraint_checks = True
-
 
 class BasicTestModel(models.Model):
     field1 = models.CharField(max_length=100)

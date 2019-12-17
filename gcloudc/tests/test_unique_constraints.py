@@ -82,43 +82,45 @@ class TestUniqueConstraints(TestCase):
             TestUserTwo.objects.bulk_create([TestUserTwo(username="Mickey Bell"), TestUserTwo(username="Tony Thorpe")])
         self.assertEqual(TestUserTwo.objects.count(), 2)
 
-    @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
-    def test_insert_with_global_unique_checks_disabled(self):
-        """
-        Assert that the global flag is respected for insertions, such that
-        any unique constraints defined on the model are ignored.
-        """
-        user_kwargs = {"username": "tonyt", "first_name": "Tony", "second_name": "Thorpe"}
+    # Currently, we don't allow unique constraints to be disabled - leaving here
+    # for if we change our mind
+    # @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
+    # def test_insert_with_global_unique_checks_disabled(self):
+    #     """
+    #     Assert that the global flag is respected for insertions, such that
+    #     any unique constraints defined on the model are ignored.
+    #     """
+    #     user_kwargs = {"username": "tonyt", "first_name": "Tony", "second_name": "Thorpe"}
 
-        TestUser.objects.create(**user_kwargs)
-        TestUser.objects.create(**user_kwargs)
+    #     TestUser.objects.create(**user_kwargs)
+    #     TestUser.objects.create(**user_kwargs)
 
-        self.assertEqual(TestUser.objects.count(), 2)
+    #     self.assertEqual(TestUser.objects.count(), 2)
 
-        # when unique constraints are disabled, it also means that we don't
-        # create any additional UniqueMarker entities on put()
-        unique_markers = get_kind_query("uniquemarker", keys_only=True)
-        self.assertEqual(len(unique_markers), 0)
+    #     # when unique constraints are disabled, it also means that we don't
+    #     # create any additional UniqueMarker entities on put()
+    #     unique_markers = get_kind_query("uniquemarker", keys_only=True)
+    #     self.assertEqual(len(unique_markers), 0)
 
-    @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
-    def test_insert_with_model_settings_precident(self):
-        """
-        Assert that despite unique constraints being disabled globally,
-        on a per model basis it can be enabled.
-        """
-        # so for the model without the explicit model level setting,
-        # unique constraints are not applied due to the global flag
-        user_kwargs = {"username": "tonythorpe", "first_name": "Tony", "second_name": "Thorpe"}
-        TestUser.objects.create(**user_kwargs)
-        TestUser.objects.create(**user_kwargs)
+    # @override_settings(ENFORCE_CONSTRAINT_CHECKS=False)
+    # def test_insert_with_model_settings_precident(self):
+    #     """
+    #     Assert that despite unique constraints being disabled globally,
+    #     on a per model basis it can be enabled.
+    #     """
+    #     # so for the model without the explicit model level setting,
+    #     # unique constraints are not applied due to the global flag
+    #     user_kwargs = {"username": "tonythorpe", "first_name": "Tony", "second_name": "Thorpe"}
+    #     TestUser.objects.create(**user_kwargs)
+    #     TestUser.objects.create(**user_kwargs)
 
-        self.assertEqual(TestUser.objects.count(), 2)
+    #     self.assertEqual(TestUser.objects.count(), 2)
 
-        # but for the model where it is, normal behaviour is demonstrated
-        user_kwargs = {"username": "BS3"}
-        TestUserTwo.objects.create(**user_kwargs)
-        with self.assertRaises(IntegrityError):
-            TestUserTwo.objects.create(**user_kwargs)
+    #     # but for the model where it is, normal behaviour is demonstrated
+    #     user_kwargs = {"username": "BS3"}
+    #     TestUserTwo.objects.create(**user_kwargs)
+    #     with self.assertRaises(IntegrityError):
+    #         TestUserTwo.objects.create(**user_kwargs)
 
     def test_update_with_constraint_conflict(self):
         TestUserTwo.objects.create(username="AshtonGateEight")
