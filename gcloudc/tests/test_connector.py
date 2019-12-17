@@ -1336,7 +1336,7 @@ class EdgeCaseTests(TestCase):
 
     def test_unusual_queries(self):
 
-        results = TestFruit.objects.filter(name__in=["apple", "orange"])
+        results = list(TestFruit.objects.filter(name__in=["apple", "orange"]))
         self.assertEqual(1, len(results))
         self.assertItemsEqual(["apple"], [x.name for x in results])
 
@@ -1382,7 +1382,7 @@ class EdgeCaseTests(TestCase):
         self.assertEqual(2, len(results))
         self.assertItemsEqual(["A", "B"], [x.username for x in results])
 
-        results = TestUser.objects.filter(username__in=["A", "B"]).filter(username__in=["A"])
+        results = list(TestUser.objects.filter(username__in=["A", "B"]).filter(username__in=["A"]))
         self.assertEqual(1, len(results))
         self.assertItemsEqual(["A"], [x.username for x in results])
 

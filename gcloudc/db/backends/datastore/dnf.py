@@ -288,7 +288,7 @@ def normalize_query(query):
                         seen[key].value = max(seen[key].value, node.value)
                     elif node.operator == "=":
                         # Impossible filter! remove the AND branch entirely
-                        if and_branch in top_node.children:
+                        if and_branch in top_node.children and seen[key].value != node.value:
                             top_node.children.remove(and_branch)
                         break
                     else:
