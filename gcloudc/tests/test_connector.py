@@ -55,6 +55,7 @@ from gcloudc.db.backends.datastore.utils import (
 )
 from gcloudc.db.decorators import disable_cache
 from gcloudc.db.backends.datastore import indexing
+from gcloudc.db.backends.datastore.unique_mixins import UniquenessMixin
 from gcloudc.db.backends.datastore.unique_utils import unique_identifiers_from_entity, _unique_combinations
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
