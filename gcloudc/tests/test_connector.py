@@ -8,7 +8,7 @@ import re
 import uuid
 from hashlib import md5
 from string import ascii_letters as letters
-from unittest import skipIf
+from unittest import skipIf, skip
 
 # LIBRARIES
 import django
@@ -1979,6 +1979,8 @@ class CascadeDeletionTests(TestCase):
         self.assertEqual(Enclosure.objects.count(), 0)
         self.assertEqual(Animal.objects.count(), 0)
 
+    # see https://github.com/googleapis/google-cloud-python/issues/9921
+    @skip("This test should not fail once the emulator bug is fixed")
     def test_deleting_more_than_30_items(self):
         zoo = Zoo.objects.create()
 
