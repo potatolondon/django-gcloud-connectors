@@ -280,7 +280,7 @@ class Query(object):
 
         def process_date(value, lookup_type):
             value = ensure_datetime(value)
-            ret = datetime.datetime.fromtimestamp(0)
+            ret = datetime.datetime.utcfromtimestamp(0)
 
             POSSIBLE_LOOKUPS = ("year", "month", "day", "hour", "minute", "second")
 

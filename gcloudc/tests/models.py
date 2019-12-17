@@ -311,3 +311,8 @@ class MultiTableChildOne(MultiTableParent):
 
 class MultiTableChildTwo(MultiTableParent):
     child_two_field = models.CharField(max_length=32)
+
+
+class DateTimeModel(models.Model):
+    datetime_field = models.DateTimeField(auto_now_add=True)
+    date_field = models.DateField(auto_now_add=True)

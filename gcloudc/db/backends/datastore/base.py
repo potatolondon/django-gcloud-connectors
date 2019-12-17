@@ -408,7 +408,7 @@ class DatabaseOperations(BaseDatabaseOperations):
     def adapt_timefield_value(self, value):
         if value is not None:
             value = make_timezone_naive(value)
-            value = datetime.datetime.combine(datetime.datetime.fromtimestamp(0), value)
+            value = datetime.datetime.combine(datetime.datetime.utcfromtimestamp(0), value)
         return value
 
     def adapt_decimalfield_value(self, value, max_digits, decimal_places):

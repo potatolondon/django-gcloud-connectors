@@ -62,6 +62,7 @@ from google.cloud.datastore.query import Query
 from . import TestCase
 from .models import (
     Animal,
+    DateTimeModel,
     DurationModel,
     Enclosure,
     IntegerModel,
@@ -1282,16 +1283,20 @@ class EdgeCaseTests(TestCase):
             turns into a like query. This test just makes sure we behave the same
         """
 
-        instance = DateTimeModel.objects.create() # Create a DateTimeModel, it has auto_now stuff
+        instance = DateTimeModel.objects.create()  # Create a DateTimeModel, it has auto_now stuff
+
+        by_datetime = list(DateTimeModel.objects.filter(
+                datetime_field__contains=instance.datetime_field.date()
+        ))
 
         # Make sure that if we query a datetime on a date it is properly returned
         self.assertItemsEqual(
             [instance],
-            DateTimeModel.objects.filter(
-                datetime_field__contains=instance.datetime_field.date()
-            )
+            by_datetime
         )
-        self.assertItemsEqual([instance], DateTimeModel.objects.filter(date_field__contains=instance.date_field.year))
+
+        by_year = list(DateTimeModel.objects.filter(date_field__contains=instance.date_field.year))
+        self.assertItemsEqual([instance], by_year)
 
     def test_combinations_of_special_indexes(self):
         qs = TestUser.objects.filter(username__iexact='Hello') | TestUser.objects.filter(username__contains='ood')
@@ -1609,13 +1614,13 @@ class EdgeCaseTests(TestCase):
 
         dates = TestUser.objects.dates('last_login', 'day')
         self.assertEqual(
-            [datetime.date(2013, 4, 5), last_a_login],
+            [datetime.date(2013, 4, 5), datetime.date(last_a_login.year, last_a_login.month, last_a_login.day)],
             list(dates)
         )
 
         dates = TestUser.objects.dates('last_login', 'day', order='DESC')
         self.assertEqual(
-            [last_a_login, datetime.date(2013, 4, 5)],
+            [datetime.date(last_a_login.year, last_a_login.month, last_a_login.day), datetime.date(2013, 4, 5)],
             list(dates)
         )
 
@@ -1972,6 +1977,21 @@ def deferred_func():
 
 
 class CascadeDeletionTests(TestCase):
+    def test_deleting_less_than_25_items(self):
+        zoo = Zoo.objects.create()
+
+        for i in range(10):
+            enclosure = Enclosure.objects.create(zoo=zoo)
+            for i in range(2):
+                Animal.objects.create(enclosure=enclosure)
+
+        self.assertEqual(Animal.objects.count(), 20)
+
+        zoo.delete()
+
+        self.assertEqual(Enclosure.objects.count(), 0)
+        self.assertEqual(Animal.objects.count(), 0)
+
     def test_deleting_more_than_30_items(self):
         zoo = Zoo.objects.create()
 

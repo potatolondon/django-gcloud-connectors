@@ -1,3 +1,8 @@
+tests_datetimemodel:
+  date_field:
+  - contains
+  datetime_field:
+  - contains
 tests_integermodel:
   integer_field:
   - iexact
