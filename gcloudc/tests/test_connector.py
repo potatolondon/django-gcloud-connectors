@@ -38,6 +38,7 @@ from django.test.utils import override_settings
 from django.utils import six
 from django.utils.safestring import SafeText
 from django.utils.six.moves import range
+from django.utils.timezone import make_aware
 from gcloudc.db.backends.datastore import transaction
 from gcloudc.db.backends.datastore.commands import FlushCommand
 from gcloudc.db.backends.datastore.constraints import UNIQUE_MARKER_KIND
@@ -640,7 +641,36 @@ class BackendTests(TestCase):
         The returned datetime and time values should include microseconds.
         See issue #707.
         """
-        from django.utils.timezone import make_aware
+
+        t = datetime.time(22, 13, 50, 541022)
+        dt = make_aware(datetime.datetime(2016, 5, 27, 18, 40, 12, 927371))
+        NullDate.objects.create(time=t, datetime=dt)
+        result = list(NullDate.objects.all().values_list('time', 'datetime'))
+        expected = [(t, dt)]
+
+        self.assertItemsEqual(result, expected)
+
+    @override_settings(USE_TZ=False)
+    def test_datetime_and_time_fields_precision_for_projection_queries_no_tz(self):
+        """
+        The returned datetime and time values should include microseconds.
+        See issue #707.
+        """
+
+        t = datetime.time(22, 13, 50, 541022)
+        dt = datetime.datetime(2016, 5, 27, 18, 40, 12, 927371)
+        NullDate.objects.create(time=t, datetime=dt)
+        result = list(NullDate.objects.all().values_list('time', 'datetime'))
+        expected = [(t, dt)]
+
+        self.assertItemsEqual(result, expected)
+
+    @override_settings(TIMEZONE="Europe/Rome")
+    def test_datetime_and_time_fields_precision_for_projection_queries_other_tz(self):
+        """
+        The returned datetime and time values should include microseconds.
+        See issue #707.
+        """
 
         t = datetime.time(22, 13, 50, 541022)
         dt = make_aware(datetime.datetime(2016, 5, 27, 18, 40, 12, 927371))
