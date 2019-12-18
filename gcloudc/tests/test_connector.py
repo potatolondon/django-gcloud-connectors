@@ -962,104 +962,6 @@ class ConstraintTests(TestCase):
             u'tests_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd|related_name_id:1'
         ], ids_one)
 
-    def test_error_on_update_doesnt_change_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        instance = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
-        qry = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE)
-        qry.Order(("created", rpc.Query.DESCENDING))
-
-        marker = [x for x in qry.Run()][0]
-
-        # Make sure we assigned the instance
-        self.assertEqual(
-            marker["instance"],
-            rpc.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
-        )
-
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
-        self.assertEqual(expected_marker, marker.key().id_or_name())
-
-        instance.name = "Two"
-
-        def wrapped_put(*args, **kwargs):
-            kind = args[0][0].kind() if isinstance(args[0], list) else args[0].kind()
-            if kind != UniqueMarker.kind():
-                raise AssertionError()
-            return rpc.Put(*args, **kwargs)
-
-        with sleuth.switch("djangae.db.backends.appengine.commands.rpc.Put", wrapped_put):
-            with self.assertRaises(Exception):
-                instance.save()
-
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-        marker = [x for x in qry.Run()][0]
-        # Make sure we assigned the instance
-        self.assertEqual(
-            marker["instance"],
-            rpc.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
-        )
-
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
-        self.assertEqual(expected_marker, marker.key().id_or_name())
-
-    def test_error_on_insert_doesnt_create_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        def wrapped_put(*args, **kwargs):
-            kind = args[0][0].kind() if isinstance(args[0], list) else args[0].kind()
-            if kind != UniqueMarker.kind():
-                raise AssertionError()
-            return rpc.Put(*args, **kwargs)
-
-        with sleuth.switch("djangae.db.backends.appengine.commands.rpc.Put", wrapped_put):
-            with self.assertRaises(Exception):
-                ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            0,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
-    def test_delete_clears_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        instance = ModelWithUniques.objects.create(name="One")
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-        instance.delete()
-        self.assertEqual(
-            0,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
-    @override_settings(DJANGAE_DISABLE_CONSTRAINT_CHECKS=True)
-    def test_constraints_disabled_doesnt_create_or_check_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        instance1 = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            initial_count,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-        )
-
-        instance2 = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(instance1.name, instance2.name)
-        self.assertFalse(instance1 == instance2)
-
     def test_list_field_unique_constaints(self):
         instance1 = UniqueModel.objects.create(unique_field=1, unique_combo_one=1, unique_list_field=["A", "C"])
 
@@ -1289,8 +1191,10 @@ class EdgeCaseTests(TestCase):
         child2 = MultiTableChildTwo.objects.create(parent_field="child2", child_two_field="child2")
 
         self.assertEqual(3, MultiTableParent.objects.count())
-        self.assertItemsEqual([parent.pk, child1.pk, child2.pk],
-            list(MultiTableParent.objects.values_list('pk', flat=True)))
+        self.assertItemsEqual(
+            [parent.pk, child1.pk, child2.pk],
+            list(MultiTableParent.objects.values_list('pk', flat=True))
+        )
         self.assertEqual(1, MultiTableChildOne.objects.count())
         self.assertEqual(child1, MultiTableChildOne.objects.get())
 
@@ -1457,7 +1361,7 @@ class EdgeCaseTests(TestCase):
         TestUser.objects.filter(username="A").delete()
         self.assertEqual(count - 1, TestUser.objects.count())
 
-        TestUser.objects.filter(username="B").exclude(username="B").delete() # Should do nothing
+        TestUser.objects.filter(username="B").exclude(username="B").delete()  # Should do nothing
         self.assertEqual(count - 1, TestUser.objects.count())
 
         TestUser.objects.all().delete()
@@ -1625,14 +1529,26 @@ class EdgeCaseTests(TestCase):
         obj = TestFruit.objects.create(name='pear')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
         for index in indexes:
-            add_special_index(default_connection, TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
+            add_special_index(
+                default_connection,
+                TestFruit,
+                'color',
+                get_indexer(TestFruit._meta.get_field("color"), index),
+                index
+            )
         obj.save()
 
     def test_special_indexes_for_unusually_long_values(self):
         obj = TestFruit.objects.create(name='pear', color='1234567890-=!@#$%^&*()_+qQWERwertyuiopasdfghjklzxcvbnm')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
         for index in indexes:
-            add_special_index(default_connection, TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
+            add_special_index(
+                default_connection,
+                TestFruit,
+                'color',
+                get_indexer(TestFruit._meta.get_field("color"), index),
+                index
+            )
         obj.save()
 
         qry = TestFruit.objects.filter(color__contains='1234567890-=!@#$%^&*()_+qQWERwertyuiopasdfghjklzxcvbnm')
@@ -1687,7 +1603,7 @@ class EdgeCaseTests(TestCase):
 
             t1 = TestFruit.objects.create(name="Kiwi", origin="New Zealand", color="Green")
             self.assertEqual(t1, TestFruit.objects.filter(name__iexact="kiwi").get())
-            self.assertFalse(indexing._project_special_indexes) # Nothing was added
+            self.assertFalse(indexing._project_special_indexes)  # Nothing was added
         finally:
             indexing._project_special_indexes = project
             indexing._app_special_indexes = additional
