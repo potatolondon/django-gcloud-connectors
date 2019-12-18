@@ -691,26 +691,30 @@ class BackendTests(TestCase):
         self.assertEqual(t1, TestUser.objects.filter(condition).first())
 
     def test_only_defer_does_project(self):
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.only("pk").all())
-            self.assertTrue(watcher.calls[0].kwargs["keys_only"])
-            self.assertFalse(watcher.calls[0].kwargs["projection"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.only("pk").all())
+                self.assertFalse(query.calls[0].kwargs["projection"])
+                self.assertEqual(1, keys_only.call_count)
 
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.values("pk"))
-            self.assertTrue(watcher.calls[0].kwargs["keys_only"])
-            self.assertFalse(watcher.calls[0].kwargs["projection"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.values("pk"))
+                self.assertFalse(query.calls[0].kwargs["projection"])
+                self.assertEqual(1, keys_only.call_count)
 
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.only("username").all())
-            self.assertFalse(watcher.calls[0].kwargs["keys_only"])
-            self.assertItemsEqual(watcher.calls[0].kwargs["projection"], ["username"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.only("username").all())
+                self.assertEqual(0, keys_only.call_count)
+                self.assertItemsEqual(query.calls[0].kwargs["projection"], ["username"])
 
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.defer("username").all())
-            self.assertFalse(watcher.calls[0].kwargs["keys_only"])
-            self.assertTrue(watcher.calls[0].kwargs["projection"])
-            self.assertFalse("username" in watcher.calls[0].kwargs["projection"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.defer("username").all())
+                self.assertEqual(0, keys_only.call_count)
+                self.assertTrue(query.calls[0].kwargs["projection"])
+                self.assertFalse("username" in query.calls[0].kwargs["projection"])
 
     def test_chaining_none_filter(self):
         t1 = TestUser.objects.create()
