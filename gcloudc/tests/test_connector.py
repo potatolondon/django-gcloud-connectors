@@ -297,37 +297,27 @@ class BackendTests(TestCase):
     def test_gae_conversion(self):
         # A PK IN query should result in a single get by key
 
-        with sleuth.switch("djangae.db.backends.appengine.commands.rpc.Get", lambda *args, **kwargs: []) as get_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.get") as get_mock:
             list(TestUser.objects.filter(pk__in=[1, 2, 3]))  # Force the query to run
             self.assertEqual(1, get_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.commands.rpc.Query.Run", lambda *args, **kwargs: []
-        ) as query_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query_mock:
             list(TestUser.objects.filter(username="test"))
             self.assertEqual(1, query_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.meta_queries.AsyncMultiQuery.Run", lambda *args, **kwargs: []
-        ) as query_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.fetch") as query_mock:
             list(TestUser.objects.filter(username__in=["test", "cheese"]))
             self.assertEqual(1, query_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.commands.rpc.Get", lambda *args, **kwargs: []
-        ) as get_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.get") as get_mock:
             list(TestUser.objects.filter(pk=1))
             self.assertEqual(1, get_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.meta_queries.AsyncMultiQuery.Run", lambda *args, **kwargs: []
-        ) as query_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.fetch") as query_mock:
             list(TestUser.objects.exclude(username__startswith="test"))
             self.assertEqual(1, query_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.commands.rpc.Get", lambda *args, **kwargs: []
-        ) as get_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.get") as get_mock:
             list(
                 TestUser.objects.filter(pk__in=[1, 2, 3, 4, 5, 6, 7, 8]).
                 filter(username__in=["test", "test2", "test3"]).
