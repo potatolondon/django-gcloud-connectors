@@ -190,30 +190,29 @@ class BackendTests(TestCase):
     def test_get_by_keys(self):
         colors = ["Red", "Green", "Blue", "Yellow", "Orange"]
         fruits = [TestFruit.objects.create(name=str(x), color=random.choice(colors)) for x in range(32)]
+        rpc = transaction._rpc(default_connection.alias)
 
         # Check that projections work with key lookups
-        with sleuth.watch('djangae.db.backends.appengine.rpc.Query.__init__') as query_init:
-            with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
-                TestFruit.objects.only("color").get(pk="0").color
-                self.assertEqual(query_init.calls[0].kwargs["projection"], ["color"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            TestFruit.objects.only("color").get(pk="0").color
+            self.assertEqual(query.calls[0].kwargs["projection"], ["color"])
 
-                # Make sure the query is an ancestor of the key
-                self.assertEqual(
-                    query_anc.calls[0].args[1],
-                    rpc.Key.from_path(
-                        TestFruit._meta.db_table, "0", namespace=DEFAULT_NAMESPACE
-                    )
+            # Make sure the query is an ancestor of the key
+            self.assertEqual(
+                query.call_returns[0].ancestor,
+                rpc.key(
+                    TestFruit._meta.db_table, "0"
                 )
+            )
 
         # Now check projections work with fewer than 100 things
-        with sleuth.watch('djangae.db.backends.appengine.meta_queries.AsyncMultiQuery.__init__') as query_init:
-            with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
+        with sleuth.watch('gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.__init__') as query_init:
+            # with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
+            with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
                 keys = [str(x) for x in range(32)]
-                results = list(TestFruit.objects.only("color").filter(pk__in=keys).order_by("name"))
-
-                self.assertEqual(query_init.call_count, 1) # One multiquery
-                self.assertEqual(query_anc.call_count, 32) # 32 Ancestor calls
-                self.assertEqual(len(query_init.calls[0].args[1]), 32)
+                results = list(TestFruit.objects.only("color").filter(pk__in=keys).order_by("name"))  # One multiquery
+                self.assertEqual(query_init.call_count, 1)
+                self.assertEqual(len([x.ancestor for x in query.call_returns if x.ancestor]), 32)  # 32 Ancestor calls
 
                 # Confirm the ordering is correct
                 self.assertEqual(sorted(keys), [x.pk for x in results])
