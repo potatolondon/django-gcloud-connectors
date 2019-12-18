@@ -568,12 +568,12 @@ class BackendTests(TestCase):
         # Color fields is missing (not even None)
         # we need more than 1 so we explore all sorting branches
         values = {'name': 'c'}
-        entity = Entity(rpc.key(TestFruit._meta.db_table))
+        entity = Entity(rpc.key(TestFruit._meta.db_table, 'c'))
         entity.update(values)
         rpc.put(entity)
 
         values = {'name': 'd'}
-        entity = Entity(rpc.key(TestFruit._meta.db_table))
+        entity = Entity(rpc.key(TestFruit._meta.db_table, 'd'))
         entity.update(values)
         rpc.put(entity)
 
@@ -582,7 +582,7 @@ class BackendTests(TestCase):
 
         # Sorted list. No exception should be raised
         # (esp KeyError from django_ordering_comparison)
-        with sleuth.watch('djangae.db.backends.appengine.commands.utils.django_ordering_comparison') as compare:
+        with sleuth.watch('gcloudc.db.backends.datastore.meta_queries.django_ordering_comparison') as compare:
             all_names = ['a', 'b', 'c', 'd']
             fruits = list(
                 TestFruit.objects.filter(name__in=all_names).order_by('color', 'name')
