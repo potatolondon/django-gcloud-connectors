@@ -1440,6 +1440,13 @@ class EdgeCaseTests(TestCase):
         obj2 = SelfRelatedModel.objects.create(related=obj)
         self.assertEqual(list(obj.selfrelatedmodel_set.all()), [obj2])
 
+    def test_self_relations_unsaved(self):
+        """ Tests self-referencing relations (ForeignKey('self')) """
+
+        obj = SelfRelatedModel()
+        SelfRelatedModel(related=obj)
+        self.assertEqual(list(obj.selfrelatedmodel_set.all()), [])
+
     def test_special_indexes_for_empty_fields(self):
         obj = TestFruit.objects.create(name='pear')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
