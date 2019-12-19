@@ -40,9 +40,6 @@ class TestUser(models.Model):
 class TestUserTwo(models.Model):
     username = models.CharField(max_length=32, unique=True)
 
-    class Djangae:
-        enforce_constraint_checks = True
-
 
 class BasicTestModel(models.Model):
     field1 = models.CharField(max_length=100)
@@ -243,6 +240,14 @@ class ModelWithUniques(models.Model):
     name = models.CharField(max_length=64, unique=True)
 
 
+class ModelWithUniquesOnForeignKey(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    related_name = models.ForeignKey(ModelWithUniques, unique=True, on_delete=models.DO_NOTHING)
+
+    class Meta:
+        unique_together = [("name", "related_name")]
+
+
 class UniqueModelWithLongPK(models.Model):
     long_pk = models.CharField(max_length=500, primary_key=True)
     unique_field = models.IntegerField(unique=True)
@@ -303,3 +308,8 @@ class MultiTableChildOne(MultiTableParent):
 
 class MultiTableChildTwo(MultiTableParent):
     child_two_field = models.CharField(max_length=32)
+
+
+class DateTimeModel(models.Model):
+    datetime_field = models.DateTimeField(auto_now_add=True)
+    date_field = models.DateField(auto_now_add=True)

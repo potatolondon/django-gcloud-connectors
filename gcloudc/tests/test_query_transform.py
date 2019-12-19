@@ -324,9 +324,21 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual(query.where.children[0].children[1].operator, "=")
         self.assertEqual(query.where.children[0].children[1].value, u"Fir")
 
-    def test_or_queries(self):
+    def test_impossible_or_query(self):
         qs = TestUser.objects.filter(
             username="python").filter(
+            Q(username__in=["ruby", "jruby"]) | (Q(username="php") & ~Q(username="perl"))
+        )
+
+        with self.assertRaises(EmptyResultSet):
+            normalize_query(transform_query(
+                connections['default'],
+                qs.query
+            ))
+
+    def test_or_queries(self):
+        qs = TestUser.objects.filter(
+            first_name="python").filter(
             Q(username__in=["ruby", "jruby"]) | (Q(username="php") & ~Q(username="perl"))
         )
 
@@ -336,16 +348,16 @@ class QueryNormalizationTests(TestCase):
         ))
 
         # After IN and != explosion, we have...
-        # (AND: (username='python', OR: (username='ruby', username='jruby', AND: (username='php', AND: (username < 'perl', username > 'perl')))))
+        # (AND: (first_name='python', OR: (username='ruby', username='jruby', AND: (username='php', AND: (username < 'perl', username > 'perl')))))
 
         # Working backwards,
         # AND: (username < 'perl', username > 'perl') can't be simplified
         # AND: (username='php', AND: (username < 'perl', username > 'perl')) can become (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
         # OR: (username='ruby', username='jruby', (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl')) can't be simplified
-        # (AND: (username='python', OR: (username='ruby', username='jruby', (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
+        # (AND: (first_name='python', OR: (username='ruby', username='jruby', (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
         # becomes...
-        # (OR: (AND: username='python', username = 'ruby'), (AND: username='python', username='jruby'), (AND: username='python', username='php', username < 'perl') \
-        #      (AND: username='python', username='php', username > 'perl')
+        # (OR: (AND: first_name='python', username = 'ruby'), (AND: first_name='python', username='jruby'), (AND: first_name='python', username='php', username < 'perl') \
+        #      (AND: first_name='python', username='php', username > 'perl')
 
         self.assertTrue(4, len(query.where.children[0].children))
 
@@ -354,21 +366,21 @@ class QueryNormalizationTests(TestCase):
         possible_children = [query.where.children[i] for i in range(4)]
 
         expected = find_children_containing_node(possible_children, "username", "=", "jruby")
-        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "first_name", "=", "python"))
         self.assertTrue(find_children_containing_node([expected], "username", "=", "jruby"))
 
         expected = find_children_containing_node(possible_children, "username", ">", "perl")
-        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "first_name", "=", "python"))
         self.assertTrue(find_children_containing_node([expected], "username", "=", "php"))
         self.assertTrue(find_children_containing_node([expected], "username", ">", "perl"))
 
         expected = find_children_containing_node(possible_children, "username", "<", "perl")
-        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "first_name", "=", "python"))
         self.assertTrue(find_children_containing_node([expected], "username", "=", "php"))
         self.assertTrue(find_children_containing_node([expected], "username", "<", "perl"))
 
         expected = find_children_containing_node(possible_children, "username", "=", "ruby")
-        self.assertTrue(find_children_containing_node([expected], "username", "=", "python"))
+        self.assertTrue(find_children_containing_node([expected], "first_name", "=", "python"))
         self.assertTrue(find_children_containing_node([expected], "username", "=", "ruby"))
 
         qs = TestUser.objects.filter(username="test") | TestUser.objects.filter(username="cheese")
@@ -421,9 +433,9 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual("__key__", query.where.children[1].column)
         self.assertEqual("__key__", query.where.children[2].column)
         self.assertEqual({
-                rpc.key(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
-                rpc.key(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
-                rpc.key(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 1),
+                rpc.key(TestUser._meta.db_table, 2),
+                rpc.key(TestUser._meta.db_table, 3),
             }, {
                 query.where.children[0].value,
                 query.where.children[1].value,
@@ -448,9 +460,9 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual("test", query.where.children[0].children[1].value)
 
         self.assertEqual({
-                rpc.key(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
-                rpc.key(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
-                rpc.key(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
+                rpc.key(TestUser._meta.db_table, 1),
+                rpc.key(TestUser._meta.db_table, 2),
+                rpc.key(TestUser._meta.db_table, 3),
             }, {
                 query.where.children[0].children[0].value,
                 query.where.children[1].children[0].value,

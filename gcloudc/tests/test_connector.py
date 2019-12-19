@@ -8,7 +8,7 @@ import re
 import uuid
 from hashlib import md5
 from string import ascii_letters as letters
-from unittest import skipIf
+from unittest import skipIf, skip
 
 # LIBRARIES
 import django
@@ -38,6 +38,7 @@ from django.test.utils import override_settings
 from django.utils import six
 from django.utils.safestring import SafeText
 from django.utils.six.moves import range
+from django.utils.timezone import make_aware
 from gcloudc.db.backends.datastore import transaction
 from gcloudc.db.backends.datastore.commands import FlushCommand
 from gcloudc.db.backends.datastore.constraints import UNIQUE_MARKER_KIND
@@ -54,18 +55,22 @@ from gcloudc.db.backends.datastore.utils import (
 )
 from gcloudc.db.decorators import disable_cache
 from gcloudc.db.backends.datastore import indexing
+from gcloudc.db.backends.datastore.unique_mixins import UniquenessMixin
+from gcloudc.db.backends.datastore.unique_utils import unique_identifiers_from_entity, _unique_combinations
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
 from . import TestCase
 from .models import (
     Animal,
+    DateTimeModel,
     DurationModel,
     Enclosure,
     IntegerModel,
     ModelWithDates,
     ModelWithNullableCharField,
     ModelWithUniques,
+    ModelWithUniquesOnForeignKey,
     MultiTableChildOne,
     MultiTableChildTwo,
     MultiTableParent,
@@ -185,30 +190,29 @@ class BackendTests(TestCase):
     def test_get_by_keys(self):
         colors = ["Red", "Green", "Blue", "Yellow", "Orange"]
         fruits = [TestFruit.objects.create(name=str(x), color=random.choice(colors)) for x in range(32)]
+        rpc = transaction._rpc(default_connection.alias)
 
         # Check that projections work with key lookups
-        with sleuth.watch('djangae.db.backends.appengine.rpc.Query.__init__') as query_init:
-            with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
-                TestFruit.objects.only("color").get(pk="0").color
-                self.assertEqual(query_init.calls[0].kwargs["projection"], ["color"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            TestFruit.objects.only("color").get(pk="0").color
+            self.assertEqual(query.calls[0].kwargs["projection"], ["color"])
 
-                # Make sure the query is an ancestor of the key
-                self.assertEqual(
-                    query_anc.calls[0].args[1],
-                    rpc.Key.from_path(
-                        TestFruit._meta.db_table, "0", namespace=DEFAULT_NAMESPACE
-                    )
+            # Make sure the query is an ancestor of the key
+            self.assertEqual(
+                query.call_returns[0].ancestor,
+                rpc.key(
+                    TestFruit._meta.db_table, "0"
                 )
+            )
 
         # Now check projections work with fewer than 100 things
-        with sleuth.watch('djangae.db.backends.appengine.meta_queries.AsyncMultiQuery.__init__') as query_init:
-            with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
+        with sleuth.watch('gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.__init__') as query_init:
+            # with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
+            with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
                 keys = [str(x) for x in range(32)]
-                results = list(TestFruit.objects.only("color").filter(pk__in=keys).order_by("name"))
-
-                self.assertEqual(query_init.call_count, 1) # One multiquery
-                self.assertEqual(query_anc.call_count, 32) # 32 Ancestor calls
-                self.assertEqual(len(query_init.calls[0].args[1]), 32)
+                results = list(TestFruit.objects.only("color").filter(pk__in=keys).order_by("name"))  # One multiquery
+                self.assertEqual(query_init.call_count, 1)
+                self.assertEqual(len([x.ancestor for x in query.call_returns if x.ancestor]), 32)  # 32 Ancestor calls
 
                 # Confirm the ordering is correct
                 self.assertEqual(sorted(keys), [x.pk for x in results])
@@ -293,37 +297,27 @@ class BackendTests(TestCase):
     def test_gae_conversion(self):
         # A PK IN query should result in a single get by key
 
-        with sleuth.switch("djangae.db.backends.appengine.commands.rpc.Get", lambda *args, **kwargs: []) as get_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.get") as get_mock:
             list(TestUser.objects.filter(pk__in=[1, 2, 3]))  # Force the query to run
             self.assertEqual(1, get_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.commands.rpc.Query.Run", lambda *args, **kwargs: []
-        ) as query_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query_mock:
             list(TestUser.objects.filter(username="test"))
             self.assertEqual(1, query_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.meta_queries.AsyncMultiQuery.Run", lambda *args, **kwargs: []
-        ) as query_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.fetch") as query_mock:
             list(TestUser.objects.filter(username__in=["test", "cheese"]))
             self.assertEqual(1, query_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.commands.rpc.Get", lambda *args, **kwargs: []
-        ) as get_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.get") as get_mock:
             list(TestUser.objects.filter(pk=1))
             self.assertEqual(1, get_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.meta_queries.AsyncMultiQuery.Run", lambda *args, **kwargs: []
-        ) as query_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.fetch") as query_mock:
             list(TestUser.objects.exclude(username__startswith="test"))
             self.assertEqual(1, query_mock.call_count)
 
-        with sleuth.switch(
-            "djangae.db.backends.appengine.commands.rpc.Get", lambda *args, **kwargs: []
-        ) as get_mock:
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.get") as get_mock:
             list(
                 TestUser.objects.filter(pk__in=[1, 2, 3, 4, 5, 6, 7, 8]).
                 filter(username__in=["test", "test2", "test3"]).
@@ -563,12 +557,12 @@ class BackendTests(TestCase):
         # Color fields is missing (not even None)
         # we need more than 1 so we explore all sorting branches
         values = {'name': 'c'}
-        entity = Entity(rpc.key(TestFruit._meta.db_table))
+        entity = Entity(rpc.key(TestFruit._meta.db_table, 'c'))
         entity.update(values)
         rpc.put(entity)
 
         values = {'name': 'd'}
-        entity = Entity(rpc.key(TestFruit._meta.db_table))
+        entity = Entity(rpc.key(TestFruit._meta.db_table, 'd'))
         entity.update(values)
         rpc.put(entity)
 
@@ -577,7 +571,7 @@ class BackendTests(TestCase):
 
         # Sorted list. No exception should be raised
         # (esp KeyError from django_ordering_comparison)
-        with sleuth.watch('djangae.db.backends.appengine.commands.utils.django_ordering_comparison') as compare:
+        with sleuth.watch('gcloudc.db.backends.datastore.meta_queries.django_ordering_comparison') as compare:
             all_names = ['a', 'b', 'c', 'd']
             fruits = list(
                 TestFruit.objects.filter(name__in=all_names).order_by('color', 'name')
@@ -638,8 +632,39 @@ class BackendTests(TestCase):
         The returned datetime and time values should include microseconds.
         See issue #707.
         """
+
+        t = datetime.time(22, 13, 50, 541022)
+        dt = make_aware(datetime.datetime(2016, 5, 27, 18, 40, 12, 927371))
+        NullDate.objects.create(time=t, datetime=dt)
+        result = list(NullDate.objects.all().values_list('time', 'datetime'))
+        expected = [(t, dt)]
+
+        self.assertItemsEqual(result, expected)
+
+    @override_settings(USE_TZ=False)
+    def test_datetime_and_time_fields_precision_for_projection_queries_no_tz(self):
+        """
+        The returned datetime and time values should include microseconds.
+        See issue #707.
+        """
+
         t = datetime.time(22, 13, 50, 541022)
         dt = datetime.datetime(2016, 5, 27, 18, 40, 12, 927371)
+        NullDate.objects.create(time=t, datetime=dt)
+        result = list(NullDate.objects.all().values_list('time', 'datetime'))
+        expected = [(t, dt)]
+
+        self.assertItemsEqual(result, expected)
+
+    @override_settings(TIMEZONE="Europe/Rome")
+    def test_datetime_and_time_fields_precision_for_projection_queries_other_tz(self):
+        """
+        The returned datetime and time values should include microseconds.
+        See issue #707.
+        """
+
+        t = datetime.time(22, 13, 50, 541022)
+        dt = make_aware(datetime.datetime(2016, 5, 27, 18, 40, 12, 927371))
         NullDate.objects.create(time=t, datetime=dt)
         result = list(NullDate.objects.all().values_list('time', 'datetime'))
         expected = [(t, dt)]
@@ -655,26 +680,30 @@ class BackendTests(TestCase):
         self.assertEqual(t1, TestUser.objects.filter(condition).first())
 
     def test_only_defer_does_project(self):
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.only("pk").all())
-            self.assertTrue(watcher.calls[0].kwargs["keys_only"])
-            self.assertFalse(watcher.calls[0].kwargs["projection"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.only("pk").all())
+                self.assertFalse(query.calls[0].kwargs["projection"])
+                self.assertEqual(1, keys_only.call_count)
 
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.values("pk"))
-            self.assertTrue(watcher.calls[0].kwargs["keys_only"])
-            self.assertFalse(watcher.calls[0].kwargs["projection"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.values("pk"))
+                self.assertFalse(query.calls[0].kwargs["projection"])
+                self.assertEqual(1, keys_only.call_count)
 
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.only("username").all())
-            self.assertFalse(watcher.calls[0].kwargs["keys_only"])
-            self.assertItemsEqual(watcher.calls[0].kwargs["projection"], ["username"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.only("username").all())
+                self.assertEqual(0, keys_only.call_count)
+                self.assertItemsEqual(query.calls[0].kwargs["projection"], ["username"])
 
-        with sleuth.watch("djangae.db.backends.appengine.rpc.Query.__init__") as watcher:
-            list(TestUser.objects.defer("username").all())
-            self.assertFalse(watcher.calls[0].kwargs["keys_only"])
-            self.assertTrue(watcher.calls[0].kwargs["projection"])
-            self.assertFalse("username" in watcher.calls[0].kwargs["projection"])
+        with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
+            with sleuth.watch("google.cloud.datastore.query.Query.keys_only") as keys_only:
+                list(TestUser.objects.defer("username").all())
+                self.assertEqual(0, keys_only.call_count)
+                self.assertTrue(query.calls[0].kwargs["projection"])
+                self.assertFalse("username" in query.calls[0].kwargs["projection"])
 
     def test_chaining_none_filter(self):
         t1 = TestUser.objects.create()
@@ -821,39 +850,27 @@ class ConstraintTests(TestCase):
         self.assertEqual(instance, ModelWithUniques.objects.get(name="One"))
 
     def test_conflicting_insert_throws_integrity_error(self):
-        try:
-            constraints.UNOWNED_MARKER_TIMEOUT_IN_SECONDS = 0
+        ModelWithUniques.objects.create(name="One")
+
+        with self.assertRaises(IntegrityError):
             ModelWithUniques.objects.create(name="One")
 
-            with self.assertRaises(IntegrityError):
-                ModelWithUniques.objects.create(name="One")
+        # An insert with a specified ID enters a different code path
+        # so we need to ensure it works
+        ModelWithUniques.objects.create(id=555, name="Two")
 
-            # An insert with a specified ID enters a different code path
-            # so we need to ensure it works
-            ModelWithUniques.objects.create(id=555, name="Two")
+        with self.assertRaises(IntegrityError):
+            ModelWithUniques.objects.create(name="Two")
 
-            with self.assertRaises(IntegrityError):
-                ModelWithUniques.objects.create(name="Two")
+        # Make sure that bulk create works properly
+        ModelWithUniques.objects.bulk_create([
+            ModelWithUniques(name="Three"),
+            ModelWithUniques(name="Four"),
+            ModelWithUniques(name="Five"),
+        ])
 
-            # Make sure that bulk create works properly
-            ModelWithUniques.objects.bulk_create([
-                ModelWithUniques(name="Three"),
-                ModelWithUniques(name="Four"),
-                ModelWithUniques(name="Five"),
-            ])
-
-            with self.assertRaises(IntegrityError):
-                ModelWithUniques.objects.create(name="Four")
-
-            with self.assertRaises(NotSupportedError):
-                # Make sure bulk creates are limited when there are unique constraints
-                # involved
-                ModelWithUniques.objects.bulk_create(
-                    [ModelWithUniques(name=str(x)) for x in range(26)]
-                )
-
-        finally:
-            constraints.UNOWNED_MARKER_TIMEOUT_IN_SECONDS = 5
+        with self.assertRaises(IntegrityError):
+            ModelWithUniques.objects.create(name="Four")
 
     def test_integrity_error_message_correct(self):
         """ Check that the IntegrityError messages mentions the correct field(s). """
@@ -906,28 +923,29 @@ class ConstraintTests(TestCase):
             instance.name = "One"
             instance.save()
 
-    def test_existing_marker_replaced_if_nonexistent_instance(self):
+    def test_delete_works_regardless_of_markers(self):
         stale_instance = ModelWithUniques.objects.create(name="One")
 
+        rpc = transaction._rpc(default_connection.alias)
         # Delete the entity without updating the markers
-        key = rpc.Key.from_path(ModelWithUniques._meta.db_table, stale_instance.pk, namespace=DEFAULT_NAMESPACE)
-        rpc.Delete(key)
+        key = rpc.key(ModelWithUniques._meta.db_table, stale_instance.pk)
+        rpc.delete(key)
 
-        ModelWithUniques.objects.create(name="One") # Should be fine
-        with self.assertRaises(IntegrityError):
-            ModelWithUniques.objects.create(name="One")
+        ModelWithUniques.objects.create(name="One")
 
     def test_unique_combinations_are_returned_correctly(self):
         combos_one = _unique_combinations(ModelWithUniquesOnForeignKey, ignore_pk=True)
         combos_two = _unique_combinations(ModelWithUniquesOnForeignKey, ignore_pk=False)
+        rpc = transaction._rpc(default_connection.alias)
 
         self.assertEqual([['name', 'related_name'], ['name'], ['related_name']], combos_one)
         self.assertEqual([['name', 'related_name'], ['id'], ['name'], ['related_name']], combos_two)
 
         class Entity(dict):
             def __init__(self, model, id):
-                self._key = rpc.Key.from_path(model, id, namespace=DEFAULT_NAMESPACE)
+                self._key = rpc.key(model, id)
 
+            @property
             def key(self):
                 return self._key
 
@@ -935,123 +953,14 @@ class ConstraintTests(TestCase):
         e1["name"] = "One"
         e1["related_name_id"] = 1
 
-        ids_one = unique_identifiers_from_entity(ModelWithUniquesOnForeignKey, e1)
+        ids_one = unique_identifiers_from_entity(ModelWithUniquesOnForeignKey, e1, ignore_pk=False)
 
         self.assertItemsEqual([
-            u'djangae_modelwithuniquesonforeignkey|id:1',
-            u'djangae_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd',
-            u'djangae_modelwithuniquesonforeignkey|related_name_id:1',
-            u'djangae_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd|related_name_id:1'
+            u'tests_modelwithuniquesonforeignkey|id:1',
+            u'tests_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd',
+            u'tests_modelwithuniquesonforeignkey|related_name_id:1',
+            u'tests_modelwithuniquesonforeignkey|name:06c2cea18679d64399783748fa367bdd|related_name_id:1'
         ], ids_one)
-
-    def test_error_on_update_doesnt_change_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        instance = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
-        qry = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE)
-        qry.Order(("created", rpc.Query.DESCENDING))
-
-        marker = [x for x in qry.Run()][0]
-
-        # Make sure we assigned the instance
-        self.assertEqual(
-            marker["instance"],
-            rpc.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
-        )
-
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
-        self.assertEqual(expected_marker, marker.key().id_or_name())
-
-        instance.name = "Two"
-
-        def wrapped_put(*args, **kwargs):
-            kind = args[0][0].kind() if isinstance(args[0], list) else args[0].kind()
-            if kind != UniqueMarker.kind():
-                raise AssertionError()
-            return rpc.Put(*args, **kwargs)
-
-        with sleuth.switch("djangae.db.backends.appengine.commands.rpc.Put", wrapped_put):
-            with self.assertRaises(Exception):
-                instance.save()
-
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-        marker = [x for x in qry.Run()][0]
-        # Make sure we assigned the instance
-        self.assertEqual(
-            marker["instance"],
-            rpc.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
-        )
-
-        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
-        self.assertEqual(expected_marker, marker.key().id_or_name())
-
-    def test_error_on_insert_doesnt_create_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        def wrapped_put(*args, **kwargs):
-            kind = args[0][0].kind() if isinstance(args[0], list) else args[0].kind()
-            if kind != UniqueMarker.kind():
-                raise AssertionError()
-            return rpc.Put(*args, **kwargs)
-
-        with sleuth.switch("djangae.db.backends.appengine.commands.rpc.Put", wrapped_put):
-            with self.assertRaises(Exception):
-                ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            0,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
-    def test_delete_clears_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        instance = ModelWithUniques.objects.create(name="One")
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-        instance.delete()
-        self.assertEqual(
-            0,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
-
-    @override_settings(DJANGAE_DISABLE_CONSTRAINT_CHECKS=True)
-    def test_constraints_disabled_doesnt_create_or_check_markers(self):
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-
-        instance1 = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(
-            initial_count,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-        )
-
-        instance2 = ModelWithUniques.objects.create(name="One")
-
-        self.assertEqual(instance1.name, instance2.name)
-        self.assertFalse(instance1 == instance2)
-
-    @override_settings(DJANGAE_DISABLE_CONSTRAINT_CHECKS=True)
-    def test_constraints_can_be_enabled_per_model(self):
-
-        initial_count = rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
-        ModelWithUniquesAndOverride.objects.create(name="One")
-
-        self.assertEqual(
-            1,
-            rpc.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
-        )
 
     def test_list_field_unique_constaints(self):
         instance1 = UniqueModel.objects.create(unique_field=1, unique_combo_one=1, unique_list_field=["A", "C"])
@@ -1246,16 +1155,20 @@ class EdgeCaseTests(TestCase):
             turns into a like query. This test just makes sure we behave the same
         """
 
-        instance = DateTimeModel.objects.create() # Create a DateTimeModel, it has auto_now stuff
+        instance = DateTimeModel.objects.create()  # Create a DateTimeModel, it has auto_now stuff
+
+        by_datetime = list(DateTimeModel.objects.filter(
+                datetime_field__contains=instance.datetime_field.date()
+        ))
 
         # Make sure that if we query a datetime on a date it is properly returned
         self.assertItemsEqual(
             [instance],
-            DateTimeModel.objects.filter(
-                datetime_field__contains=instance.datetime_field.date()
-            )
+            by_datetime
         )
-        self.assertItemsEqual([instance], DateTimeModel.objects.filter(date_field__contains=instance.date_field.year))
+
+        by_year = list(DateTimeModel.objects.filter(date_field__contains=instance.date_field.year))
+        self.assertItemsEqual([instance], by_year)
 
     def test_combinations_of_special_indexes(self):
         qs = TestUser.objects.filter(username__iexact='Hello') | TestUser.objects.filter(username__contains='ood')
@@ -1278,8 +1191,10 @@ class EdgeCaseTests(TestCase):
         child2 = MultiTableChildTwo.objects.create(parent_field="child2", child_two_field="child2")
 
         self.assertEqual(3, MultiTableParent.objects.count())
-        self.assertItemsEqual([parent.pk, child1.pk, child2.pk],
-            list(MultiTableParent.objects.values_list('pk', flat=True)))
+        self.assertItemsEqual(
+            [parent.pk, child1.pk, child2.pk],
+            list(MultiTableParent.objects.values_list('pk', flat=True))
+        )
         self.assertEqual(1, MultiTableChildOne.objects.count())
         self.assertEqual(child1, MultiTableChildOne.objects.get())
 
@@ -1295,7 +1210,7 @@ class EdgeCaseTests(TestCase):
 
     def test_unusual_queries(self):
 
-        results = TestFruit.objects.filter(name__in=["apple", "orange"])
+        results = list(TestFruit.objects.filter(name__in=["apple", "orange"]))
         self.assertEqual(1, len(results))
         self.assertItemsEqual(["apple"], [x.name for x in results])
 
@@ -1341,7 +1256,7 @@ class EdgeCaseTests(TestCase):
         self.assertEqual(2, len(results))
         self.assertItemsEqual(["A", "B"], [x.username for x in results])
 
-        results = TestUser.objects.filter(username__in=["A", "B"]).filter(username__in=["A"])
+        results = list(TestUser.objects.filter(username__in=["A", "B"]).filter(username__in=["A"]))
         self.assertEqual(1, len(results))
         self.assertItemsEqual(["A"], [x.username for x in results])
 
@@ -1446,7 +1361,7 @@ class EdgeCaseTests(TestCase):
         TestUser.objects.filter(username="A").delete()
         self.assertEqual(count - 1, TestUser.objects.count())
 
-        TestUser.objects.filter(username="B").exclude(username="B").delete() # Should do nothing
+        TestUser.objects.filter(username="B").exclude(username="B").delete()  # Should do nothing
         self.assertEqual(count - 1, TestUser.objects.count())
 
         TestUser.objects.all().delete()
@@ -1573,13 +1488,13 @@ class EdgeCaseTests(TestCase):
 
         dates = TestUser.objects.dates('last_login', 'day')
         self.assertEqual(
-            [datetime.date(2013, 4, 5), last_a_login],
+            [datetime.date(2013, 4, 5), datetime.date(last_a_login.year, last_a_login.month, last_a_login.day)],
             list(dates)
         )
 
         dates = TestUser.objects.dates('last_login', 'day', order='DESC')
         self.assertEqual(
-            [last_a_login, datetime.date(2013, 4, 5)],
+            [datetime.date(last_a_login.year, last_a_login.month, last_a_login.day), datetime.date(2013, 4, 5)],
             list(dates)
         )
 
@@ -1614,14 +1529,26 @@ class EdgeCaseTests(TestCase):
         obj = TestFruit.objects.create(name='pear')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
         for index in indexes:
-            add_special_index(default_connection, TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
+            add_special_index(
+                default_connection,
+                TestFruit,
+                'color',
+                get_indexer(TestFruit._meta.get_field("color"), index),
+                index
+            )
         obj.save()
 
     def test_special_indexes_for_unusually_long_values(self):
         obj = TestFruit.objects.create(name='pear', color='1234567890-=!@#$%^&*()_+qQWERwertyuiopasdfghjklzxcvbnm')
         indexes = ['icontains', 'contains', 'iexact', 'iendswith', 'endswith', 'istartswith', 'startswith']
         for index in indexes:
-            add_special_index(default_connection, TestFruit, 'color', get_indexer(TestFruit._meta.get_field("color"), index), index)
+            add_special_index(
+                default_connection,
+                TestFruit,
+                'color',
+                get_indexer(TestFruit._meta.get_field("color"), index),
+                index
+            )
         obj.save()
 
         qry = TestFruit.objects.filter(color__contains='1234567890-=!@#$%^&*()_+qQWERwertyuiopasdfghjklzxcvbnm')
@@ -1676,7 +1603,7 @@ class EdgeCaseTests(TestCase):
 
             t1 = TestFruit.objects.create(name="Kiwi", origin="New Zealand", color="Green")
             self.assertEqual(t1, TestFruit.objects.filter(name__iexact="kiwi").get())
-            self.assertFalse(indexing._project_special_indexes) # Nothing was added
+            self.assertFalse(indexing._project_special_indexes)  # Nothing was added
         finally:
             indexing._project_special_indexes = project
             indexing._app_special_indexes = additional
@@ -1936,6 +1863,23 @@ def deferred_func():
 
 
 class CascadeDeletionTests(TestCase):
+    def test_deleting_less_than_25_items(self):
+        zoo = Zoo.objects.create()
+
+        for i in range(10):
+            enclosure = Enclosure.objects.create(zoo=zoo)
+            for i in range(2):
+                Animal.objects.create(enclosure=enclosure)
+
+        self.assertEqual(Animal.objects.count(), 20)
+
+        zoo.delete()
+
+        self.assertEqual(Enclosure.objects.count(), 0)
+        self.assertEqual(Animal.objects.count(), 0)
+
+    # see https://github.com/googleapis/google-cloud-python/issues/9921
+    @skip("This test should not fail once the emulator bug is fixed")
     def test_deleting_more_than_30_items(self):
         zoo = Zoo.objects.create()
 

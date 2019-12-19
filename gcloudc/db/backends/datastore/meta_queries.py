@@ -236,7 +236,7 @@ class AsyncMultiQuery(object):
                 yield next_entity
 
                 if limit and yielded_count == limit:
-                    raise StopIteration()
+                    break
 
 
 def _convert_entity_based_on_query_options(entity, keys_only, projection):

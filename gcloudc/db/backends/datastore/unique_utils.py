@@ -7,21 +7,10 @@ from . import meta_queries
 
 def _has_enabled_constraints(model_or_instance):
     """
-    Takes into account any model or global level flag which would determine
-    if we should respect any unique constraints defined on a model definition.
+    Since we're no longer doing any extra write to enforce uniqueness there's
+    not much point in not enforcing it, so we always keep it enabled
     """
-    # are unique constraints explicitly enabled on the provided model take
-    # precident over any contradictory global flag
-    # TODO need to change Djangae ref for something else...
-    opts = getattr(model_or_instance, "Djangae", None)
-    if opts:
-        if hasattr(opts, "enforce_constraint_checks"):
-            if opts.enforce_constraint_checks:
-                return True
-
-    # are unique constraints active/disabled via the global flag
-    return getattr(settings, "ENFORCE_CONSTRAINT_CHECKS", True)
-
+    return True
 
 def _has_unique_constraints(model_or_instance):
     """
