@@ -1927,7 +1927,9 @@ class UniqueQueryTest(TestCase):
                 "gcloudc.db.backends.datastore.meta_queries.caching.get_from_cache",
                 return_value=None
             ) as get_from_cache:
-                with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.caching.add_entities_to_cache") as add_to_cache:
+                with sleuth.watch(
+                    "gcloudc.db.backends.datastore.meta_queries.caching.add_entities_to_cache"
+                ) as add_to_cache:
                     list(TestUser.objects.filter(username="randy"))
                     self.assertEqual(add_to_cache.call_count, 1)
                     self.assertEqual(fetch.call_count, 1)

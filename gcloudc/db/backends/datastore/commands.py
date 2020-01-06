@@ -708,7 +708,7 @@ class InsertCommand(object):
                 results.append(new_key)
             return results
 
-        @transaction.atomic(enable_cache=False)
+        @transaction.atomic()
         def insert_chunk(keys, entities):
             for key in keys:
                 # sanity check the key isn't already taken
@@ -1016,7 +1016,7 @@ class UpdateCommand(object):
         # that require unique checks. This could potentially open a can of worms
         # but would have the benefit of removing any per-commit limits the datastore
         # currently imposes on transactions
-        @transaction.atomic(enable_cache=False)
+        @transaction.atomic()
         def perform_update(results):
             i = 0
             for result in results:
