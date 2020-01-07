@@ -152,6 +152,22 @@ class TransactionTests(TestCase):
         with self.assertRaises(ValueError):
             txn1("test", "banana")
 
+    def test_enable_cache_argument(self):
+        user = TestUser.objects.create(username="randy", first_name="Randy")
+
+        with sleuth.watch('gcloudc.db.backends.datastore.context.CacheDict.get') as cachedict_get:
+            TestUser.objects.get(username="randy")
+            self.assertEqual(cachedict_get.call_count, 1)
+
+            with transaction.atomic(enable_cache=False):
+                user.first_name = "Łukasz"
+                user.save()
+
+                non_cached = TestUser.objects.get(username="randy")
+                # Result is not fetched from the cache
+                self.assertEqual(non_cached.first_name, "Randy")
+                self.assertEqual(cachedict_get.call_count, 1)
+
     def test_nested_decorator(self):
         # Nested decorator pattern we discovered can cause a connection_stack
         # underflow.

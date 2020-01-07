@@ -1,5 +1,6 @@
 import logging
 import threading
+import types
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -40,7 +41,7 @@ def _apply_namespace(value_or_map, namespace):
     """ Add the given namespace to the given cache key(s). """
     if hasattr(value_or_map, "keys"):
         return {"{}:{}".format(namespace, k): v for k, v in value_or_map.items()}
-    elif hasattr(value_or_map, "__iter__"):
+    elif hasattr(value_or_map, "__iter__") and not isinstance(value_or_map, str):
         return ["{}:{}".format(namespace, x) for x in value_or_map]
     else:
         return "{}:{}".format(namespace, value_or_map)

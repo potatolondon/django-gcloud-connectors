@@ -311,8 +311,14 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         read_only = False if read_only is None else read_only
         state.using = using = "default" if using is None else using
 
-        # FIXME: Implement context caching for transactions
         enable_cache = decorator_args.get("enable_cache", True)
+        context = caching.get_context()
+        state.original_context_enabled = context.context_enabled
+
+        # Only force-disable cache, do not force enable (e.g. if already disabled
+        # in the context, leave as is)
+        if enable_cache is False:
+            context.context_enabled = enable_cache
 
         new_transaction = None
 
@@ -365,13 +371,13 @@ class AtomicDecorator(context_decorator.ContextDecorator):
         finally:
             if isinstance(transaction, (IndependentTransaction, NormalTransaction)):
                 context = caching.get_context()
-
                 # Clear the context cache at the end of a transaction
                 if exception:
                     context.stack.pop(discard=True)
                 else:
                     context.stack.pop(apply_staged=True, clear_staged=True)
 
+                context.context_enabled = state.original_context_enabled
             transaction.exit()
 
 
