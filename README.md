@@ -1,5 +1,7 @@
 # Django GCloud Connectors (DGC)
 
+**Note: This project is now living in GitLab: https://gitlab.com/potato-oss/djangae/django-gcloud-connectors**
+
 **WARNING: This is very much a work in progress, is unstable, and not ready for use**
 
 The aim of this project is to create Django database connector / backend for Google Cloud.
