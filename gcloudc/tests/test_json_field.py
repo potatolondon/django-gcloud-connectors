@@ -40,6 +40,7 @@ class JSONFieldModelTests(TestCase):
 
         instance = JSONFieldModel.objects.get(pk=1)
         self.assertEqual(instance.json_field, "bananas")
+        self.assertFalse(True, "This should fail terribly")
 
     def test_object_pairs_hook_with_ordereddict(self):
         items = [("first", 1), ("second", 2), ("third", 3), ("fourth", 4)]
