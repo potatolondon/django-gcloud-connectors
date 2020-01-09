@@ -1,3 +1,8 @@
+# Docker file bundling gcp sdk and python 3.7
+# To push changes to gitlab run
+# docker build -t registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37 .
+# docker push registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
+
 FROM python:3.7-buster
 
 RUN echo "deb http://ftp.us.debian.org/debian sid main" | tee /etc/apt/sources.list.d/sid-main.list

@@ -1,9 +1,9 @@
 python37:
-  image: registry.gitlab.com/potato-oss/djangae/django-gcloud-connectors/python37:latest
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
   stage: test
   script: tox -e py37
 
 python36:
-  image: registry.gitlab.com/potato-oss/djangae/django-gcloud-connectors/python36:latest
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
   stage: test
   script: tox -e py36
