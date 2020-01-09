@@ -26,4 +26,4 @@ SECRET_KEY = "secret_key_for_testing"
 USE_TZ = True
 
 TEST_RUNNER = "xmlrunner.extra.djangotestrunner.XMLTestRunner"
-TEST_OUTPUT_FILE_NAME = "report.xml"
+TEST_OUTPUT_FILE_NAME = ".reports/django-tests.xml"
