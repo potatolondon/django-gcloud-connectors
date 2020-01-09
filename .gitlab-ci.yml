@@ -7,3 +7,7 @@ python36:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
   stage: test
   script: tox -e py36
+
+flake8:
+  image: registry.gitlab.com/potato-oss/djangae/django-gcloud-connectors/python37:latest
+  script: tox -e flake8
