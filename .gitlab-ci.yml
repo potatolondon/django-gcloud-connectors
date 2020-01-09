@@ -2,6 +2,9 @@ python37:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
   stage: test
   script: tox -e py37
+  artifacts:
+    reports:
+      junit: report.xml
 
 python36:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
