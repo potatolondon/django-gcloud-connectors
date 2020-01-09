@@ -26,3 +26,6 @@ flake8:
   before_script:
     - mkdir .reports
   script: tox -e flake8 -- --format junit-xml --output-file=".reports/flake8.xml"
+  artifacts:
+    reports:
+      junit: .reports/flake8.xml
