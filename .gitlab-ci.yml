@@ -1,8 +1,11 @@
 include:
   - template: SAST.gitlab-ci.yml
 
+include:
+  template: Dependency-Scanning.gitlab-ci.yml
+
 variables:
-  SAST_BANDIT_EXCLUDED_PATHS: "gcloudc/tests/*,test_settings.py"
+  SAST_BANDIT_EXCLUDED_PATHS: "gcloudc/tests,test_settings.py"
 
 python37:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
