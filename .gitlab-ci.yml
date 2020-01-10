@@ -1,3 +1,6 @@
+include:
+  - template: SAST.gitlab-ci.yml
+
 python37:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
   stage: test
@@ -7,3 +10,4 @@ python36:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
   stage: test
   script: tox -e py36
+
