@@ -69,7 +69,9 @@ class WhereNode(object):
     def set_leaf(self, column, operator, value, is_pk_field, negated, lookup_name, namespace, target_field=None):
 
         # We need access to the Datastore client to access the Key factory
-        gclient = connections[self.using].connection.gclient
+        wrapper = connections[self.using]
+        wrapper.ensure_connection()
+        gclient = wrapper.connection.gclient
 
         assert column
         assert operator
