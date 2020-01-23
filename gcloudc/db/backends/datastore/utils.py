@@ -262,7 +262,12 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
 
     key = Key(*args, namespace=connection.namespace, project=connection.gcloud_project)
 
-    entity = Entity(key)
+    exclude_from_indexes = tuple(
+        field.column for field in model._meta.fields
+        if field.db_type(connection) in ('text', 'bytes')
+    )
+
+    entity = Entity(key, exclude_from_indexes)
     entity.update(field_values)
 
     if fields_to_unindex:

@@ -491,7 +491,6 @@ class DatabaseCreation(BaseDatabaseCreation):
         "TimeField": "time",
         "URLField": "string",
         "TextField": "text",
-        "XMLField": "text",
         "BinaryField": "bytes",
     }
 
