@@ -29,6 +29,7 @@ from .models import (
     BasicTestModel,
     BinaryFieldModel,
     ModelWithCharField,
+    NonIndexedModel,
     PFAwards,
     PFAuthor,
     PFPost,
@@ -286,6 +287,20 @@ class DurationFieldModelTests(TestCase):
 
 class ModelWithNonNullableFieldAndDefaultValue(models.Model):
     some_field = models.IntegerField(null=False, default=1086)
+
+
+class NonIndexedModelFieldsTests(TestCase):
+    def test_long_textfield(self):
+        long_text = "A" * 1501
+        instance = NonIndexedModel()
+        instance.content = long_text
+        instance.save()
+
+    def test_big_binaryfield(self):
+        long_binary = ("A" * 1501).encode('utf-8')
+        instance = NonIndexedModel()
+        instance.binary = long_binary
+        instance.save()
 
 
 # ModelWithNonNullableFieldAndDefaultValueTests verifies that we maintain same
