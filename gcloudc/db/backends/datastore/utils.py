@@ -264,7 +264,7 @@ def django_instance_to_entities(connection, fields, raw, instance, check_null=Tr
 
     exclude_from_indexes = tuple(
         field.column for field in model._meta.fields
-        if field.db_type(connection) == 'text' or field.db_type(connection) == 'bytes'
+        if field.db_type(connection) in ('text', 'bytes')
     )
 
     entity = Entity(key, exclude_from_indexes)
