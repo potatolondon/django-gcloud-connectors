@@ -56,7 +56,11 @@ from gcloudc.db.backends.datastore.utils import (
 from gcloudc.db.decorators import disable_cache
 from gcloudc.db.backends.datastore import indexing
 from gcloudc.db.backends.datastore.unique_mixins import UniquenessMixin
-from gcloudc.db.backends.datastore.unique_utils import unique_identifiers_from_entity, _unique_combinations
+from gcloudc.db.backends.datastore.unique_utils import (
+    query_is_unique,
+    unique_identifiers_from_entity,
+    _unique_combinations,
+)
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.query import Query
 
@@ -207,7 +211,6 @@ class BackendTests(TestCase):
 
         # Now check projections work with fewer than 100 things
         with sleuth.watch('gcloudc.db.backends.datastore.meta_queries.AsyncMultiQuery.__init__') as query_init:
-            # with sleuth.watch('djangae.db.backends.appengine.rpc.Query.Ancestor') as query_anc:
             with sleuth.watch("gcloudc.db.backends.datastore.transaction.Transaction.query") as query:
                 keys = [str(x) for x in range(32)]
                 results = list(TestFruit.objects.only("color").filter(pk__in=keys).order_by("name"))  # One multiquery
@@ -751,6 +754,32 @@ class CacheTests(TestCase):
         import time
         time.sleep(1)
         self.assertEqual(cache.get('test?'), None)
+
+    def test_disable_cache_decorator(self):
+        user = TestUser.objects.create(username="randy", first_name="Randy")
+
+        with transaction.atomic():
+            with sleuth.watch('gcloudc.db.backends.datastore.context.CacheDict.get') as cachedict_get:
+                user.first_name = "Łukasz"
+                user.save()
+
+                from_cache = TestUser.objects.get(username="randy")
+
+                # Ok, cache works
+                self.assertEqual(from_cache.first_name, "Łukasz")
+                self.assertEqual(cachedict_get.call_count, 1)
+
+                with disable_cache():
+                    non_cached = TestUser.objects.get(username="randy")
+                    # Result is not fetched from the cache
+                    self.assertEqual(non_cached.first_name, "Randy")
+                    self.assertEqual(cachedict_get.call_count, 1)
+
+                from_cache = TestUser.objects.get(username="randy")
+
+                # Previous GET didn't override the cache
+                self.assertEqual(from_cache.first_name, "Łukasz")
+                self.assertEqual(cachedict_get.call_count, 2)
 
 
 def compare_markers(list1, list2):
@@ -1843,6 +1872,89 @@ class AsyncMultiQueryTests(TestCase):
 
         self.assertEqual(len(qs), 1)
         self.assertItemsEqual([u2], qs)
+
+
+class UniqueQueryTest(TestCase):
+    def test_query_is_unique(self):
+        rpc = transaction._rpc(default_connection.alias)
+        query = rpc.query(kind="test_testuser")
+
+        # Query with no filter is not unique
+        self.assertFalse(query_is_unique(TestUser, query))
+
+        # Query with filter value set to None is not unique
+        query.add_filter('username', '=', None)
+        self.assertFalse(query_is_unique(TestUser, query))
+
+        # Query on unique field is unique
+        query = rpc.query(kind="test_testuser")
+        query.add_filter('username', '=', "randy")
+        self.assertTrue(query_is_unique(TestUser, query))
+
+        # Query on unique_together fields is unique
+        query = rpc.query(kind="test_testuser")
+        query.add_filter('first_name', '=', "Randy")
+        query.add_filter('second_name', '=', "Munroe")
+        self.assertTrue(query_is_unique(TestUser, query))
+
+        # Query on one unique_together field only is not unique
+        query = rpc.query(kind="test_testuser")
+        query.add_filter('second_name', '=', "Munroe")
+        self.assertFalse(query_is_unique(TestUser, query))
+
+        # Query on unique list field is unique only if filtering on one
+        # value only, as multiple values are interpreted as "one of"
+        query = rpc.query(kind="test_testuniquemodel")
+        query.add_filter('unique_list_field', '=', 'a')
+        query.add_filter('unique_list_field', '=', 'b')
+        self.assertFalse(query_is_unique(UniqueModel, query))
+
+        query = rpc.query(kind="test_testuniquemodel")
+        query.add_filter('unique_list_field', '=', 'b')
+        self.assertTrue(query_is_unique(UniqueModel, query))
+
+        # Query on pk field is unique
+        query = rpc.query(kind="test_testfruit")
+        # name is pk
+        query.add_filter('__key__', '=', rpc.key('test__testfruit', 'banana'))
+        self.assertTrue(query_is_unique(TestFruit, query))
+
+    def test_entity_in_cache(self):
+        TestUser.objects.create(username="randy")
+
+        with sleuth.watch("google.cloud.datastore.query.Query.fetch") as fetch:
+            list(TestUser.objects.filter(username="randy"))
+            self.assertEqual(fetch.call_count, 0)
+
+    def test_entity_not_in_cache(self):
+        TestUser.objects.create(username="randy")
+
+        with sleuth.watch("google.cloud.datastore.query.Query.fetch") as fetch:
+            with sleuth.fake(
+                "gcloudc.db.backends.datastore.meta_queries.caching.get_from_cache",
+                return_value=None
+            ) as get_from_cache:
+                with sleuth.watch(
+                    "gcloudc.db.backends.datastore.meta_queries.caching.add_entities_to_cache"
+                ) as add_to_cache:
+                    list(TestUser.objects.filter(username="randy"))
+                    self.assertEqual(add_to_cache.call_count, 1)
+                    self.assertEqual(fetch.call_count, 1)
+                    self.assertEqual(get_from_cache.call_count, 1)
+
+    def test_keys_only_query_doesnt_cache(self):
+        TestUser.objects.create(username="randy")
+
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.caching.add_entities_to_cache") as add_to_cache:
+            list(TestUser.objects.filter(username="randy").only("pk"))
+            self.assertEqual(add_to_cache.call_count, 0)
+
+    def test_projection_query_doesnt_cache(self):
+        TestUser.objects.create(username="randy")
+
+        with sleuth.watch("gcloudc.db.backends.datastore.meta_queries.caching.add_entities_to_cache") as add_to_cache:
+            list(TestUser.objects.filter(username="randy").only("first_name"))
+            self.assertEqual(add_to_cache.call_count, 0)
 
 
 class FieldConversionTests(TestCase):

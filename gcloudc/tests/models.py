@@ -313,3 +313,8 @@ class MultiTableChildTwo(MultiTableParent):
 class DateTimeModel(models.Model):
     datetime_field = models.DateTimeField(auto_now_add=True)
     date_field = models.DateField(auto_now_add=True)
+
+
+class NonIndexedModel(models.Model):
+    content = models.TextField()
+    binary = models.BinaryField()

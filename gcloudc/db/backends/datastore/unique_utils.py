@@ -1,7 +1,5 @@
 from hashlib import md5
 
-from django.conf import settings
-
 from . import meta_queries
 
 
@@ -11,6 +9,7 @@ def _has_enabled_constraints(model_or_instance):
     not much point in not enforcing it, so we always keep it enabled
     """
     return True
+
 
 def _has_unique_constraints(model_or_instance):
     """
@@ -41,8 +40,7 @@ def query_is_unique(model, query):
 
     combinations = _unique_combinations(model)
 
-    queried_fields = [x[0] for x in query.filters]
-
+    query_by_keys = {"{} {}".format(x[0], x[1]): x[2] for x in query.filters}
     for combination in combinations:
         unique_match = True
         field_names = []
@@ -55,15 +53,15 @@ def query_is_unique(model, query):
 
             # We don't match this combination if the field didn't exist in the queried fields
             # or if it was, but the value was None (you can have multiple NULL values, they aren't unique)
-            key = "{} =".format(field)
-            if key not in queried_fields or query[key] is None:
+            matching_filters = list(filter(lambda x: x[0] == field and x[1] == '=', query.filters))
+            if len(matching_filters) != 1 or matching_filters[0][2] is None:
                 unique_match = False
                 break
 
         if unique_match:
             return "|".join(
                 [model._meta.db_table]
-                + ["{}:{}".format(x, _format_value_for_identifier(query["{} =".format(x)])) for x in field_names]
+                + ["{}:{}".format(x, _format_value_for_identifier(query_by_keys["{} =".format(x)])) for x in field_names]
             )
 
     return False

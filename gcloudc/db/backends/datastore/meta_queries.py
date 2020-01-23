@@ -422,36 +422,40 @@ class UniqueQuery(object):
         self._gae_query = gae_query
         self._model = model
         self._namespace = namespace
+        self._keys_only = False
 
         self.kind = gae_query.kind
 
-    def get(self, x):
-        return self._gae_query.get(x)
-
-    def keys(self):
-        return self._gae_query.keys()
+    def keys_only(self):
+        self._gae_query.keys_only()
+        self._keys_only = True
 
     def fetch(self, limit, offset):
-        opts = self._gae_query._Query__query_options
-        if opts.keys_only or opts.projection:
-            return self._gae_query.Run(limit=limit, offset=offset)
-
+        do_cache = True
         ret = caching.get_from_cache(self._identifier, self._namespace)
-        if ret is not None and not entity_matches_query(ret, self._gae_query):
-            ret = None
+
+        if ret is not None:
+            if not entity_matches_query(ret, self._gae_query):
+                ret = None
+            else:
+                ret = [ret]
 
         if ret is None:
-            # We do a fast keys_only query to get the result
-            keys_query = rpc.Query(self.kind, keys_only=True, namespace=self._namespace)
-            keys_query.update(self._gae_query)
-            keys = keys_query.Run(limit=limit, offset=offset)
+            ret = list(self._gae_query.fetch(limit=limit, offset=offset))
+        else:
+            # We don't want to cache a result already coming from the cache...
+            do_cache = False
 
-            # Do a consistent get so we don't cache stale data, and recheck the result matches the query
-            ret = [x for x in rpc.Get(keys) if x and entity_matches_query(x, self._gae_query)]
-            if len(ret) == 1:
-                caching.add_entities_to_cache(
-                    self._model, [ret[0]], caching.CachingSituation.DATASTORE_GET, self._namespace
-                )
-            return iter(ret)
+        if self._keys_only or self._gae_query.projection:
+            # ...nor if it's coming from a keys_only/projection query
+            do_cache = False
 
-        return iter([ret])
+        if len(ret) == 1 and do_cache:
+            caching.add_entities_to_cache(
+                self._model,
+                [ret[0]],
+                caching.CachingSituation.DATASTORE_GET,
+                self._namespace,
+            )
+
+        return iter(ret)
