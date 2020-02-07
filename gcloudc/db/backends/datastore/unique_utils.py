@@ -1,7 +1,5 @@
 from hashlib import md5
 
-from . import meta_queries
-
 
 def _has_enabled_constraints(model_or_instance):
     """
@@ -34,6 +32,8 @@ def query_is_unique(model, query):
         that unique combination. Otherwise return False
     """
 
+    from . import meta_queries  # Circular import workaround
+
     if isinstance(query, meta_queries.AsyncMultiQuery):
         # By definition, a multiquery is not unique
         return False
@@ -61,7 +61,8 @@ def query_is_unique(model, query):
         if unique_match:
             return "|".join(
                 [model._meta.db_table]
-                + ["{}:{}".format(x, _format_value_for_identifier(query_by_keys["{} =".format(x)])) for x in field_names]
+                + ["{}:{}".format(x, _format_value_for_identifier(
+                    query_by_keys["{} =".format(x)])) for x in field_names]
             )
 
     return False
