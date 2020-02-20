@@ -20,13 +20,13 @@ except ImportError:
     from django.db.models.expressions import ExpressionNode as BaseExpression
 
 
-def make_timezone_naive(value):
+def make_utc_compatible(value):
     if value is None:
         return None
 
     if timezone.is_aware(value):
         if settings.USE_TZ:
-            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+            value = value.astimezone(timezone.utc)
         else:
             raise ValueError("Djangae backend does not support timezone-aware datetimes when USE_TZ is False.")
     return value
@@ -79,7 +79,7 @@ def decimal_to_string(value, max_digits=16, decimal_places=0):
 def normalise_field_value(value):
     """ Converts a field value to a common type/format to make comparable to another. """
     if isinstance(value, datetime):
-        return make_timezone_naive(value)
+        return make_utc_compatible(value)
     elif isinstance(value, Decimal):
         return decimal_to_string(value)
     return value

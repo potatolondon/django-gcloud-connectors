@@ -426,6 +426,8 @@ class DatabaseOperations(BaseDatabaseOperations):
             value = ensure_datetime(value)
 
         if value is not None and settings.USE_TZ and timezone.is_naive(value):
+            # TODO: might be good for simmetry to do something like:
+            # value.replace(tzinfo=timezone.utc).astimezone(pytz.timezone(settings.TIME_ZONE))
             value = value.replace(tzinfo=timezone.utc)
         return value
 

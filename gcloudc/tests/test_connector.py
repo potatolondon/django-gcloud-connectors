@@ -1114,6 +1114,18 @@ class EdgeCaseTests(TestCase):
         by_year = list(DateTimeModel.objects.filter(date_field__contains=instance.date_field.year))
         self.assertItemsEqual([instance], by_year)
 
+    # See https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/issues/2
+    def test_datetime_compare(self):
+        from django.utils import timezone
+        fake_future = datetime.datetime(2100, 2, 10, 11, 59, 59, tzinfo=timezone.utc)
+        fake_now = timezone.datetime(2020, 2, 10, 11, 59, 59)
+
+        instance = DateTimeModel.objects.create(datetime_field=fake_future)
+
+        fetched = DateTimeModel.objects.get(datetime_field__gt=fake_now, pk=instance.pk)
+
+        self.assertEqual(fetched, instance)
+
     def test_combinations_of_special_indexes(self):
         qs = TestUser.objects.filter(username__iexact='Hello') | TestUser.objects.filter(username__contains='ood')
 
