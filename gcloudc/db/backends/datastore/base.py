@@ -44,7 +44,7 @@ from .utils import (
     decimal_to_string,
     ensure_datetime,
     get_datastore_key,
-    make_timezone_naive,
+    make_utc_compatible,
 )
 
 logger = logging.getLogger(__name__)
@@ -394,7 +394,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return cursor.lastrowid
 
     def adapt_datetimefield_value(self, value):
-        value = make_timezone_naive(value)
+        value = make_utc_compatible(value)
         return value
 
     def value_to_db_datetime(self, value):  # Django 1.8 compatibility
@@ -407,7 +407,7 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def adapt_timefield_value(self, value):
         if value is not None:
-            value = make_timezone_naive(value)
+            value = make_utc_compatible(value)
             value = datetime.datetime.combine(datetime.datetime.utcfromtimestamp(0), value)
         return value
 
