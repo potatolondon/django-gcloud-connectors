@@ -110,7 +110,7 @@ class Cursor(object):
             self.returned_ids = sql.execute()
         else:
             raise Database.CouldBeSupportedError(
-                "Can't execute traditional SQL: '%s' (although perhaps we could make GQL work)", sql
+                "Can't execute traditional SQL: '%s' (although perhaps we could make GQL work)" % sql
             )
 
     def next(self):
