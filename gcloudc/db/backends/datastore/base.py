@@ -521,6 +521,10 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         kinds = [entity.key.id_or_name for entity in query.fetch()]
         return [TableInfo(x, "t") for x in kinds]
 
+    def get_sequences(self, cursor, table_name, table_fields=()):
+        # __key__ is the only column that can auto-populate
+        return [{'table': table_name, 'column': '__key__'}]
+
 
 class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     def column_sql(self, model, field, include_default=False):
