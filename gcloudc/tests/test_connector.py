@@ -6,12 +6,13 @@ import logging
 import random
 import re
 import uuid
-from hashlib import md5
 from string import ascii_letters as letters
-from unittest import skipIf, skip
+from unittest import (
+    skip,
+    skipIf,
+)
 
 # LIBRARIES
-import django
 import sleuth
 from django.conf import settings
 from django.core.cache import cache
@@ -29,40 +30,36 @@ from django.db import models
 from django.db.models.query import Q
 from django.forms import ModelForm
 from django.forms.models import modelformset_factory
-from django.template import (
-    Context,
-    Template,
-)
 from django.test import RequestFactory
 from django.test.utils import override_settings
 from django.utils import six
 from django.utils.safestring import SafeText
 from django.utils.six.moves import range
 from django.utils.timezone import make_aware
-from gcloudc.db.backends.datastore import transaction
+from google.cloud.datastore.entity import Entity
+
+from gcloudc.db.backends.datastore import (
+    indexing,
+    transaction,
+)
 from gcloudc.db.backends.datastore.commands import FlushCommand
-from gcloudc.db.backends.datastore.constraints import UNIQUE_MARKER_KIND
 from gcloudc.db.backends.datastore.indexing import (
     IExactIndexer,
     add_special_index,
     get_indexer,
 )
+from gcloudc.db.backends.datastore.unique_mixins import UniquenessMixin
+from gcloudc.db.backends.datastore.unique_utils import (
+    _unique_combinations,
+    query_is_unique,
+    unique_identifiers_from_entity,
+)
 from gcloudc.db.backends.datastore.utils import (
-    count_query,
     decimal_to_string,
     entity_matches_query,
     normalise_field_value,
 )
 from gcloudc.db.decorators import disable_cache
-from gcloudc.db.backends.datastore import indexing
-from gcloudc.db.backends.datastore.unique_mixins import UniquenessMixin
-from gcloudc.db.backends.datastore.unique_utils import (
-    query_is_unique,
-    unique_identifiers_from_entity,
-    _unique_combinations,
-)
-from google.cloud.datastore.entity import Entity
-from google.cloud.datastore.query import Query
 
 from . import TestCase
 from .models import (
@@ -362,8 +359,8 @@ class BackendTests(TestCase):
         )
 
     def test_exclude_nullable_field(self):
-        instance = ModelWithNullableCharField.objects.create(some_id=999) # Create a nullable thing
-        ModelWithNullableCharField.objects.create(some_id=999, field1="test") # Create a nullable thing
+        instance = ModelWithNullableCharField.objects.create(some_id=999)  # Create a nullable thing
+        ModelWithNullableCharField.objects.create(some_id=999, field1="test")  # Create a nullable thing
         self.assertItemsEqual(
             [instance],
             ModelWithNullableCharField.objects.filter(

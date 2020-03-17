@@ -1,8 +1,6 @@
-
+from contextlib import ContextDecorator
 
 from gcloudc.db.backends.datastore import caching
-from contextlib import ContextDecorator
-import logging
 
 
 class DisableCache(ContextDecorator):

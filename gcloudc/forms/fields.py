@@ -29,7 +29,7 @@ class ListWidget(forms.TextInput):
 
     def render(self, name, value, attrs=None):
         if isinstance(value, (list, tuple, set)):
-            value = u", ".join([unicode(v) for v in value])
+            value = ", ".join([str(v) for v in value])
         return super(ListWidget, self).render(name, value, attrs)
 
     def value_from_datadict(self, data, files, name):
@@ -88,10 +88,10 @@ class JSONWidget(forms.Textarea):
 
     def render(self, name, value, attrs=None):
         """ Dump the python object to JSON if it hasn't been done yet. """
-        from djangae.fields.json import dumps
+        from django.core.serializers.json import DjangoJSONEncoder
 
         if not isinstance(value, six.string_types):
-            value = dumps(value)
+            value = DjangoJSONEncoder().encode(value)
         return super(JSONWidget, self).render(name, value, attrs)
 
 

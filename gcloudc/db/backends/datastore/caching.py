@@ -1,13 +1,18 @@
 import logging
 import threading
-import types
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 from . import utils
-from .context import ContextCache, key_or_entity_compare
-from .unique_utils import _format_value_for_identifier, unique_identifiers_from_entity
+from .context import (
+    ContextCache,
+    key_or_entity_compare,
+)
+from .unique_utils import (
+    _format_value_for_identifier,
+    unique_identifiers_from_entity,
+)
 
 _local = threading.local()
 

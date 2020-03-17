@@ -1,12 +1,12 @@
-from django.db import models
-
 # encoding: utf-8
-
 import logging
 import os
 import zipfile
 
+from django.db import models
+
 from .charfields import CharField
+
 
 # pyuca only supports version 5.2.0 of the collation algorithm on Python 2.x
 COLLATION_FILE = "allkeys-5.2.0.txt"
@@ -124,7 +124,7 @@ class ComputedCollationField(ComputedFieldMixin, CharField):
     collator = None
 
     def __init__(self, source_field_name):
-        import pyuca  # Required dependency for ComputedCollationField
+        import pyuca  # noqa: F401 Required dependency for ComputedCollationField
         from pyuca.collator import Collator_5_2_0
 
         # Instantiate Collator once only to save on memory / processing

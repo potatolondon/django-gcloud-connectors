@@ -19,9 +19,6 @@ python36:
       junit: .reports/django-tests.xml
 
 flake8:
-  # Currently, we have a few things failing, so allowing it to fail.
-  # We should remove this once it's fixed
-  allow_failure: true
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
   before_script:
     - mkdir .reports

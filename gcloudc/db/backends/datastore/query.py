@@ -4,14 +4,25 @@ import logging
 import re
 from itertools import chain
 
-from django.db import NotSupportedError, connections
+from django.db import (
+    NotSupportedError,
+    connections,
+)
 from django.db.models import AutoField
 from django.db.models.sql.datastructures import EmptyResultSet
 from django.utils import six
 
 from . import POLYMODEL_CLASS_ATTRIBUTE
-from .indexing import add_special_index, get_indexer
-from .utils import ensure_datetime, get_field_from_column, get_top_concrete_parent, has_concrete_parents
+from .indexing import (
+    add_special_index,
+    get_indexer,
+)
+from .utils import (
+    ensure_datetime,
+    get_field_from_column,
+    get_top_concrete_parent,
+    has_concrete_parents,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -219,10 +230,10 @@ class Query(object):
             raise ValueError("SQL statements aren't supported with extra(select=)")
 
         # Boolean expression test
-        bool_expr = "(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[=|>|<]{1,2})\s?(?P<rhs>[\w+|']+)"
+        bool_expr = r"(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[=|>|<]{1,2})\s?(?P<rhs>[\w+|']+)"
 
         # Operator expression test
-        op_expr = "(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[+|-|/|*])\s?(?P<rhs>[\w+|']+)"
+        op_expr = r"(?P<lhs>[a-zA-Z0-9_]+)\s?(?P<op>[+|-|/|*])\s?(?P<rhs>[\w+|']+)"
 
         OP_LOOKUP = {
             "=": lambda x, y: x == y,
