@@ -16,9 +16,9 @@ from gcloudc.db.backends.datastore.query import (
 from . import TestCase
 from .models import (
     InheritedModel,
-    TransformTestModel,
-    TestUser,
     Relation,
+    TestUser,
+    TransformTestModel,
 )
 
 DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPACE")
@@ -216,17 +216,17 @@ class QueryNormalizationTests(TestCase):
             Given the following tree:
 
                    AND
-                  / | \
+                  / | ﹨
                  A  B OR
-                      / \
+                      / ﹨
                      C   D
 
              The OR should be promoted, so the resulting tree is
 
                       OR
-                     /   \
+                     /   ﹨
                    AND   AND
-                  / | \ / | \
+                  / | ﹨ / | ﹨
                  A  B C A B D
         """
 
@@ -348,15 +348,31 @@ class QueryNormalizationTests(TestCase):
         ))
 
         # After IN and != explosion, we have...
-        # (AND: (first_name='python', OR: (username='ruby', username='jruby', AND: (username='php', AND: (username < 'perl', username > 'perl')))))
+        # (AND:
+        #       (first_name='python',
+        #        OR: (username='ruby', username='jruby',
+        #             AND: (username='php',
+        #                   AND: (username < 'perl', username > 'perl')
+        #                  )
+        #            )
+        #        )
+        # )
 
         # Working backwards,
         # AND: (username < 'perl', username > 'perl') can't be simplified
-        # AND: (username='php', AND: (username < 'perl', username > 'perl')) can become (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
-        # OR: (username='ruby', username='jruby', (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl')) can't be simplified
-        # (AND: (first_name='python', OR: (username='ruby', username='jruby', (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
+        #
+        # AND: (username='php', AND: (username < 'perl', username > 'perl'))
+        # can become
+        # (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
+        #
+        # OR: (username='ruby', username='jruby',(OR: (AND: username = 'php', username < 'perl'),
+        # (AND: username='php', username > 'perl')) can't be simplified
+        #
+        # (AND: (first_name='python', OR: (username='ruby', username='jruby',
+        # (OR: (AND: username = 'php', username < 'perl'), (AND: username='php', username > 'perl'))
         # becomes...
-        # (OR: (AND: first_name='python', username = 'ruby'), (AND: first_name='python', username='jruby'), (AND: first_name='python', username='php', username < 'perl') \
+        # (OR: (AND: first_name='python', username = 'ruby'), (AND: first_name='python', username='jruby'),
+        #      (AND: first_name='python', username='php', username < 'perl')
         #      (AND: first_name='python', username='php', username > 'perl')
 
         self.assertTrue(4, len(query.where.children[0].children))

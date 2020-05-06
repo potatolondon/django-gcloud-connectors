@@ -1,6 +1,7 @@
 from . import TestCase
 from .models import ModelWithComputedCollationField
 
+
 class ComputedCollationFieldTests(TestCase):
     """Tests for `ComputedCollationField`."""
 

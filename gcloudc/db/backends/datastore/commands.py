@@ -4,27 +4,44 @@ import logging
 from datetime import datetime
 
 import django
-from django.db import DatabaseError, IntegrityError
+from django.db import (
+    DatabaseError,
+    IntegrityError,
+)
 from django.utils import six
-from django.utils.encoding import force_str, python_2_unicode_compatible
+from django.utils.encoding import (
+    force_str,
+    python_2_unicode_compatible,
+)
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.key import Key
 from google.cloud.datastore.query import Query
 
-from . import POLYMODEL_CLASS_ATTRIBUTE, meta_queries, transaction, utils
+from . import (
+    POLYMODEL_CLASS_ATTRIBUTE,
+    caching,
+    meta_queries,
+    transaction,
+    utils,
+)
 from .caching import remove_entities_from_cache_by_key
 from .constraints import (
     CONSTRAINT_VIOLATION_MSG,
     check_unique_markers_in_memory,
     has_active_unique_constraints,
 )
-
 from .dbapi import NotSupportedError
 from .dnf import normalize_query
 from .formatting import generate_sql_representation
 from .query import transform_query
-from .query_utils import get_filter, has_filter
-from .unique_utils import query_is_unique, _unique_combinations
+from .query_utils import (
+    get_filter,
+    has_filter,
+)
+from .unique_utils import (
+    _unique_combinations,
+    query_is_unique,
+)
 from .utils import (
     MockInstance,
     django_instance_to_entities,
@@ -33,8 +50,6 @@ from .utils import (
     get_field_from_column,
     has_concrete_parents,
 )
-
-from . import caching
 
 logger = logging.getLogger(__name__)
 
@@ -554,7 +569,7 @@ class SelectCommand(object):
         """
             This exists solely for django-debug-toolbar compatibility.
         """
-        return unicode(self).lower()
+        return str(self).lower()
 
 
 class FlushCommand(object):
@@ -875,7 +890,7 @@ class DeleteCommand(object):
         """
             This exists solely for django-debug-toolbar compatibility.
         """
-        return unicode(self).lower()
+        return str(self).lower()
 
     def __str__(self):
         return generate_sql_representation(self)

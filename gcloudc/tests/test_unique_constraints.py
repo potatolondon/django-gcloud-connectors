@@ -1,15 +1,16 @@
-import sleuth
 from unittest import skip
 
+import sleuth
 from django.db import connection
 from django.db.utils import IntegrityError
-from django.test.utils import override_settings
 
 from gcloudc.db.backends.datastore.transaction import TransactionFailedError
 
 from . import TestCase
-
-from .models import TestUser, TestUserTwo
+from .models import (
+    TestUser,
+    TestUserTwo,
+)
 
 
 def _get_client():

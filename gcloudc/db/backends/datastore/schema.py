@@ -3,10 +3,9 @@ import logging
 
 # 3RD PARTY
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
-from django.utils.log import getLogger
 
 # DJANGAE
-from djangae.db.backends.appengine.dbapi import CouldBeSupportedError
+from gcloudc.db.backends.datastore.dbapi import CouldBeSupportedError
 
 logger = logging.getLogger("djangae")
 
@@ -79,7 +78,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # 1. Implement it as a single mapreduce thing which *moves* the entities in a single
         # operation, thereby forcing your site to be offline/broken for a while.
         # 2. Not implement it and raise AreYouOffYourRockerError.
-        raise ProbablyNotGoingToImplementError()
+        raise NotImplementedError("See comments.")
 
     def alter_db_tablespace(self, model, old_db_tablespace, new_db_tablespace):
         """ Moves a model's table between tablespaces. """

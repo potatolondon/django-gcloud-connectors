@@ -1,12 +1,18 @@
 # LIBRARIES
-import django
-
+from django.db.models.expressions import (
+    OrderBy,
+    Value,
+)
 from django.db.models.sql import compiler
-from django.db.models.expressions import Value, OrderBy
 from django.db.models.sql.query import get_order_dir
 
-# DJANGAE
-from .commands import SelectCommand, InsertCommand, UpdateCommand, DeleteCommand
+# GCLOUDC
+from .commands import (
+    DeleteCommand,
+    InsertCommand,
+    SelectCommand,
+    UpdateCommand,
+)
 
 
 class SQLCompiler(compiler.SQLCompiler):

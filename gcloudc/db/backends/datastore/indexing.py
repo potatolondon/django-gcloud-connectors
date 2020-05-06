@@ -6,16 +6,16 @@ import re
 import sys
 from itertools import chain
 
-import yaml
-
 import django
+import yaml
 from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import six
-from gcloudc.core.validators import MaxBytesValidator
 from google.cloud.datastore.entity import Entity
+
+from gcloudc.core.validators import MaxBytesValidator
 
 from . import transaction
 from .utils import get_top_concrete_parent
@@ -700,12 +700,12 @@ class LegacyContainsIndexer(StringIndexerMixin, Indexer):
                 # substrings of each string in `value`
                 for element in value:
                     length = len(element)
-                    lists = [element[i : j + 1] for i in range(length) for j in range(i, length)]
+                    lists = [element[i: j + 1] for i in range(length) for j in range(i, length)]
                     results.extend(lists)
             else:
                 # `value` is a string. Generate a list of all its substrings.
                 length = len(value)
-                lists = [value[i : j + 1] for i in range(length) for j in range(i, length)]
+                lists = [value[i: j + 1] for i in range(length) for j in range(i, length)]
                 results.extend(lists)
 
         if not results:

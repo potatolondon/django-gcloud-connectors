@@ -1,11 +1,9 @@
 import tempfile
 
-from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
-from django.core.management import load_command_class
-
-from . import CloudDatastoreRunner, locate_command
-
+from . import (
+    CloudDatastoreRunner,
+    locate_command,
+)
 
 BaseCommand = locate_command("test")
 
