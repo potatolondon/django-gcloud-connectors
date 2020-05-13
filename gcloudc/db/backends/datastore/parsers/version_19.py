@@ -124,7 +124,7 @@ class Parser(BaseParser):
             is_pk_field=field == model._meta.pk,
             negated=negated,
             lookup_name=node.lookup_name,
-            namespace=connection.namespace
+            namespace=connection.namespace,
             target_field=field,
         )
 
