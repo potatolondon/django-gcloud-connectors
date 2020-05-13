@@ -294,7 +294,7 @@ class BaseParser(object):
             is_pk_field=field == model._meta.pk,
             negated=negated,
             lookup_name=node.lookup_name,
-            namespace=connection.ops.connection.settings_dict.get("NAMESPACE"),
+            namespace=connection.namespace,
             target_field=field,
         )
 

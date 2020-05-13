@@ -19,6 +19,7 @@ DATABASES = {
         'ENGINE': 'gcloudc.db.backends.datastore',
         'INDEXES_FILE': os.path.join(os.path.abspath(os.path.dirname(__file__)), "djangaeidx.yaml"),
         "PROJECT": "test",
+        "NAMESPACE": "",
     },
 }
 
