@@ -14,6 +14,6 @@ class QueryByKeysTest(TestCase):
 
         results = NullableFieldModel.objects.filter(
             pk__in=[1, 2, 3, 4, 5]
-        ).order_by("nullable")
+        ).order_by("nullable").values_list("pk", flat=True)
 
         self.assertCountEqual(results, [1, 5])
