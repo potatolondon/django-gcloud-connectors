@@ -318,3 +318,7 @@ class DateTimeModel(models.Model):
 class NonIndexedModel(models.Model):
     content = models.TextField()
     binary = models.BinaryField()
+
+
+class NullableFieldModel(models.Model):
+    nullable = models.IntegerField(null=True)
