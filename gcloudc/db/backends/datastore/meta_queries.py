@@ -119,6 +119,15 @@ class AsyncMultiQuery(object):
 
     def _compare_entities(self, lhs, rhs):
         def cmp(a, b):
+            # Treat None as less than everything for the purpose
+            # of ordering
+            if a is None and b is None:
+                return 0
+            elif a is None:
+                return -1
+            elif b is None:
+                return 1
+
             return (a > b) - (a < b)
 
         if isinstance(lhs, Key) and isinstance(rhs, Key):

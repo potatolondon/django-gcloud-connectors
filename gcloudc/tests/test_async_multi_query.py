@@ -1,10 +1,13 @@
+import sleuth
 from django.db import NotSupportedError
+from django.db.models import Q
 from django.test import override_settings
 
-import sleuth
-
 from . import TestCase
-from .models import MultiQueryModel
+from .models import (
+    MultiQueryModel,
+    NullableFieldModel,
+)
 
 
 class AsyncMultiQueryTest(TestCase):
@@ -63,3 +66,13 @@ class AsyncMultiQueryTest(TestCase):
 
             self.assertEqual(2, run_calls.calls[0].kwargs["limit"])
             self.assertEqual(2, run_calls.calls[1].kwargs["limit"])
+
+    def test_ordered_by_nullable_field(self):
+        NullableFieldModel.objects.create(pk=1)
+        NullableFieldModel.objects.create(pk=5, nullable=2)
+
+        results = NullableFieldModel.objects.filter(
+            Q(nullable=1) | Q(nullable=2) | Q(nullable__isnull=True)
+        ).order_by("nullable").values_list("pk", flat=True)
+
+        self.assertCountEqual(results, [1, 5])
