@@ -39,6 +39,15 @@ def compare_keys(lhs, rhs):
     """
 
     def cmp(a, b):
+        if a is None and b is None:
+            return 0
+
+        if a is None:
+            return a
+
+        if b is None:
+            return b
+
         return (a > b) - (a < b)
 
     lhs_args = [lhs.project, lhs.namespace] + list(lhs.flat_path)
