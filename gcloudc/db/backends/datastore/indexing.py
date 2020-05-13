@@ -636,7 +636,7 @@ class ContainsIndexer(StringIndexerMixin, Indexer):
             if value.startswith("%") and value.endswith("%"):
                 value = value[1:-1]
 
-        namespace = connection.settings_dict.get("NAMESPACE")
+        namespace = connection.namespace
 
         qry = transaction._rpc(using=connection.alias).query(
             kind=self._generate_kind_name(model, column), namespace=namespace

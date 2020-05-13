@@ -58,9 +58,10 @@ class Connection(object):
         self.ops = wrapper.ops
         self.queries = []
         self.settings_dict = params
+        self.namespace = wrapper.namespace
 
         self.gclient = datastore.Client(
-            namespace=params.get("NAMESPACE"),
+            namespace=wrapper.namespace,
             project=params["PROJECT"],
             # avoid a bug in the google client - it tries to authenticate even when the emulator is enabled
             # see https://github.com/googleapis/google-cloud-python/issues/5738
@@ -611,7 +612,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.validation = BaseDatabaseValidation(self)
 
         self.gcloud_project = self.settings_dict["PROJECT"]
-        self.namespace = self.settings_dict.get("NAMESPACE")
+        self.namespace = self.settings_dict.get("NAMESPACE") or None
         self.autocommit = True
 
     def is_usable(self):

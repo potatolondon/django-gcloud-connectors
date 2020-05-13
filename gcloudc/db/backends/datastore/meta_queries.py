@@ -376,6 +376,7 @@ class QueryByKeys(object):
 
         def iter_results(results):
             returned = 0
+
             # This is safe, because Django is fetching all results any way :(
             sorted_results = sorted(results, key=cmp_to_key(partial(django_ordering_comparison, self.ordering)))
             sorted_results = [result for result in sorted_results if result is not None]

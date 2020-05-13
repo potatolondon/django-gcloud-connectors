@@ -308,7 +308,7 @@ class EntityTransforms:
 class SelectCommand(object):
     def __init__(self, connection, query, keys_only=False):
         self.connection = connection.alias
-        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.namespace
 
         self.query = transform_query(connection, query)
         self.query.prepare()
@@ -584,7 +584,7 @@ class FlushCommand(object):
     def __init__(self, table, connection):
         self.connection = connection.alias
         self.table = table
-        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.namespace
 
     def execute(self):
         table = self.table
@@ -643,7 +643,7 @@ class InsertCommand(object):
         self.model = model
         self.objs = objs
         self.connection = connection
-        self.namespace = connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.namespace
         self.raw = raw
         self.fields = fields
 
@@ -780,7 +780,7 @@ class DeleteCommand(object):
     def __init__(self, connection, query):
         self.connection = connection
         self.model = query.model
-        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.namespace
 
         self.select = SelectCommand(connection, query, keys_only=True)
         self.query = self.select.query  # we only need this for the generate_sql_formatter caller...
@@ -923,7 +923,7 @@ class UpdateCommand(object):
         self.query = self.select.query
         self.values = query.values
         self.connection = connection
-        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
+        self.namespace = connection.namespace
         self.results = []
 
     def __str__(self):
