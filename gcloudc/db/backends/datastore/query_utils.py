@@ -43,10 +43,10 @@ def compare_keys(lhs, rhs):
             return 0
 
         if a is None:
-            return a
+            return -1
 
         if b is None:
-            return b
+            return 1
 
         return (a > b) - (a < b)
 
