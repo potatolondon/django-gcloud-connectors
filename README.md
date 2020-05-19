@@ -1,6 +1,6 @@
 # Django GCloud Connectors (DGC)
 
-**Note: This project is now living in GitLab: https://gitlab.com/potato-oss/djangae/django-gcloud-connectors**
+**Note: This project is now living in GitLab: https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors**
 
 **WARNING: This is very much a work in progress, is unstable, and not ready for use**
 

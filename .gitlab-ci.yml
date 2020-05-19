@@ -1,3 +1,7 @@
+stages:
+  - test
+  - build
+
 python37:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
   stage: test
@@ -26,3 +30,21 @@ flake8:
   artifacts:
     reports:
       junit: .reports/flake8.xml
+
+build and test-publish:
+  stage: build
+  image: python:3.7
+  only:
+    - tags
+  before_script:
+    - pip install twine setuptools wheel
+    - rm -rf dist
+    - python setup.py sdist bdist_wheel
+  script:
+    - python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+  artifacts:
+    paths:
+      - dist
+  variables:
+    TWINE_PASSWORD: $TEST_PYPI_TOKEN
+    TWINE_USERNAME: __token__
