@@ -1,6 +1,7 @@
 stages:
   - test
   - build
+  - publish
 
 python37:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
@@ -47,4 +48,20 @@ build and test-publish:
       - dist
   variables:
     TWINE_PASSWORD: $TEST_PYPI_TOKEN
+    TWINE_USERNAME: __token__
+
+publish to prod pypi:
+  stage: publish
+  dependencies: ["build and test-publish"]
+  needs: ["build and test-publish"]
+  when: manual
+  image: python:3.7
+  only:
+    - tags
+  before_script:
+    - pip install twine
+  script:
+    - python -m twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
+  variables:
+    TWINE_PASSWORD: $PROD_PYPI_TOKEN
     TWINE_USERNAME: __token__
