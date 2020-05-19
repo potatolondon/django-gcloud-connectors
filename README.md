@@ -33,3 +33,16 @@ tox -e py37 -- --failfast
 gcloudc provides overrides for the `runserver` and `test` commands which
 start and stop a Cloud Datastore Emulator instance. To enable this functionality
 just add `gcloudc.commands` to your `INSTALLED_APPS` setting.
+
+# Release process
+
+Release to pypi is managed by GitLab CI. To create a new release create the relevant tag
+and push it to the gitlab remote e.g.
+
+```
+git tag 1.0.0
+git push origin 1.0.0
+```
+
+This will trigger a pipeline that will publish the package in test.pypi.org.
+If that is successful, you can then manually trigger the job `publish to prod pypi` on the same pipeline to deploy to the official pypi registry.
