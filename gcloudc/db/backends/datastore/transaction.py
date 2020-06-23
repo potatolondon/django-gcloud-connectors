@@ -1,13 +1,14 @@
+import copy
 import threading
 import uuid
-import copy
+
+from google.cloud import exceptions
+from google.cloud.datastore.transaction import \
+    Transaction as DatastoreTransaction
 
 from django.db import connections
 from gcloudc import context_decorator
 from gcloudc.db.backends.datastore import caching
-from google.cloud import exceptions
-from google.cloud.datastore.transaction import \
-    Transaction as DatastoreTransaction
 
 TRANSACTION_ENTITY_LIMIT = 500
 
@@ -425,6 +426,7 @@ class NonAtomicDecorator(AtomicDecorator):
 
         context = caching.get_context()
 
+        connection = connections[state.using]
         transaction = _STORAGE.transaction_stack[state.using].pop()
 
         try:
@@ -434,12 +436,18 @@ class NonAtomicDecorator(AtomicDecorator):
                 else:
                     try:
                         transaction._datastore_transaction.commit()
+
+                        # Run Django commit hooks (if any)
+                        connection.run_and_clear_commit_hooks()
                     except exceptions.GoogleAPIError:
                         raise TransactionFailedError()
         finally:
             # Restore the context stack as it was
             context.stack.stack = context.stack.stack + state.original_stack
             transaction.exit()
+
+            # Clear Django commit hooks
+            connection.run_on_commit = []
 
 
 non_atomic = NonAtomicDecorator

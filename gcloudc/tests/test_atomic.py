@@ -2,13 +2,44 @@
 import threading
 
 import sleuth
+from django.db import connection
 from gcloudc.db import transaction
 
 from . import TestCase
-from .models import TestUser, TestFruit
+from .models import (
+    TestFruit,
+    TestUser,
+)
 
 
 class TransactionTests(TestCase):
+    def test_on_commit_works(self):
+        def increment():
+            increment.x += 1
+
+        increment.x = 0
+
+        with transaction.atomic():
+            connection.on_commit(increment)
+            self.assertEqual(increment.x, 0)
+
+        self.assertEqual(increment.x, 1)
+
+        try:
+            with transaction.atomic():
+                connection.on_commit(increment)
+                self.assertEqual(increment.x, 0)
+                raise ValueError()
+        except ValueError:
+            pass
+
+        self.assertEqual(increment.x, 1)  # Still the same
+
+        with transaction.atomic():
+            pass  # commit hook should have gone with rollback
+
+        self.assertEqual(increment.x, 1)  # Still the same
+
     def test_repeated_usage_in_a_loop(self):
         pk = TestUser.objects.create(username="foo").pk
         for i in range(4):

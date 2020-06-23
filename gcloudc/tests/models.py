@@ -322,3 +322,7 @@ class NonIndexedModel(models.Model):
 
 class NullableFieldModel(models.Model):
     nullable = models.IntegerField(null=True)
+
+
+class Thing(models.Model):
+    num = models.IntegerField(default=0)
