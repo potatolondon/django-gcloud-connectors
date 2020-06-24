@@ -651,3 +651,14 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def validate_no_broken_transaction(self):
         # Override this to do nothing, because it's not relevant to the Datastore
         pass
+
+    @property
+    def in_atomic_block(self):
+        from gcloudc.db import transaction
+        return transaction.in_atomic_block(using=self.alias)
+
+    @in_atomic_block.setter
+    def in_atomic_block(self, v):
+        # We make this a no-op, as we currently rely on
+        # the value returned by gcloudc.db.transaction
+        pass

@@ -3,10 +3,16 @@
     switching on the connection type.
 """
 
-from django.db import connections
-
+from django.db import (
+    DEFAULT_DB_ALIAS,
+    connections,
+)
+from django.db.transaction import TransactionManagementError
 from gcloudc.context_decorator import ContextDecorator
 from gcloudc.db.backends.datastore import transaction as datastore_transaction
+
+
+TransactionManagementError = TransactionManagementError
 
 
 class Atomic(ContextDecorator):
@@ -61,3 +67,21 @@ def in_atomic_block(using="default"):
         return datastore_transaction.in_atomic_block(using=using)
     except (KeyError, TypeError):
         raise ValueError("Unable to find connection with alias: %s" % using)
+
+
+def get_connection(using=None):
+    """
+    Get a database connection by name, or the default database connection
+    if no name is provided. This is a private API.
+    """
+    if using is None:
+        using = DEFAULT_DB_ALIAS
+    return connections[using]
+
+
+def on_commit(func, using=None):
+    """
+    Register `func` to be called when the current transaction is committed.
+    If the current transaction is rolled back, `func` will not be called.
+    """
+    get_connection(using).on_commit(func)

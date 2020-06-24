@@ -1,13 +1,14 @@
+import copy
 import threading
 import uuid
-import copy
+
+from google.cloud import exceptions
+from google.cloud.datastore.transaction import \
+    Transaction as DatastoreTransaction
 
 from django.db import connections
 from gcloudc import context_decorator
 from gcloudc.db.backends.datastore import caching
-from google.cloud import exceptions
-from google.cloud.datastore.transaction import \
-    Transaction as DatastoreTransaction
 
 TRANSACTION_ENTITY_LIMIT = 500
 
@@ -185,11 +186,17 @@ class IndependentTransaction(Transaction):
         txn = connection.gclient.transaction()
         super().__init__(connection, txn)
 
+        self.owner = connection.ops.connection
+        self.previous_on_commit = []
+
     def _enter(self):
+        self.previous_on_commit = self.owner.run_on_commit
+        self.owner.run_on_commit = []
         self._datastore_transaction.begin()
 
     def _exit(self):
         self._datastore_transaction = None
+        self.owner.run_on_commit = self.previous_on_commit
 
 
 class NestedTransaction(Transaction):
@@ -357,15 +364,22 @@ class AtomicDecorator(context_decorator.ContextDecorator):
     def _do_exit(cls, state, decorator_args, exception):
         _init_storage()
 
+        connection = connections[state.using]
         transaction = _STORAGE.transaction_stack[state.using].pop()
 
         try:
             if transaction._datastore_transaction:
-                if exception:
+                if exception or connection.needs_rollback:
                     transaction._datastore_transaction.rollback()
                 else:
                     try:
                         transaction._datastore_transaction.commit()
+
+                        if isinstance(transaction, (IndependentTransaction, NormalTransaction)):
+                            with non_atomic(using=state.using):
+                                # Run Django commit hooks (if any)
+                                connection.run_and_clear_commit_hooks()
+
                     except exceptions.GoogleCloudError:
                         raise TransactionFailedError()
         finally:
@@ -378,6 +392,10 @@ class AtomicDecorator(context_decorator.ContextDecorator):
                     context.stack.pop(apply_staged=True, clear_staged=True)
 
                 context.context_enabled = state.original_context_enabled
+
+            if exception:
+                connection.run_on_commit = []
+
             transaction.exit()
 
 
@@ -424,18 +442,10 @@ class NonAtomicDecorator(AtomicDecorator):
         _init_storage()
 
         context = caching.get_context()
-
         transaction = _STORAGE.transaction_stack[state.using].pop()
 
         try:
-            if transaction._datastore_transaction:
-                if exception:
-                    transaction._datastore_transaction.rollback()
-                else:
-                    try:
-                        transaction._datastore_transaction.commit()
-                    except exceptions.GoogleAPIError:
-                        raise TransactionFailedError()
+            assert(not transaction._datastore_transaction)
         finally:
             # Restore the context stack as it was
             context.stack.stack = context.stack.stack + state.original_stack
