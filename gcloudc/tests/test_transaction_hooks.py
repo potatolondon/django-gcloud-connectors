@@ -37,6 +37,32 @@ class TestConnectionOnCommit(TransactionTestCase):
     def assertNotified(self, nums):
         self.assertEqual(self.notified, nums)
 
+    def test_independent_transactions(self):
+        with transaction.atomic():
+            self.do(1)
+
+            with transaction.atomic(independent=True):
+                self.do(2)
+
+            self.assertDone([2])
+
+        self.assertDone([2, 1])
+
+    def test_independent_transaction_rollback(self):
+        with transaction.atomic():
+            self.do(1)
+
+            try:
+                with transaction.atomic(independent=True):
+                    self.do(2)
+                    raise ForcedError()
+            except ForcedError:
+                pass
+
+            self.assertDone([])
+
+        self.assertDone([1])
+
     def test_executes_immediately_if_no_transaction(self):
         self.do(1)
         self.assertDone([1])

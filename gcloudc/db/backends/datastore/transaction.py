@@ -186,11 +186,17 @@ class IndependentTransaction(Transaction):
         txn = connection.gclient.transaction()
         super().__init__(connection, txn)
 
+        self.owner = connection.ops.connection
+        self.previous_on_commit = []
+
     def _enter(self):
+        self.previous_on_commit = self.owner.run_on_commit
+        self.owner.run_on_commit = []
         self._datastore_transaction.begin()
 
     def _exit(self):
         self._datastore_transaction = None
+        self.owner.run_on_commit = self.previous_on_commit
 
 
 class NestedTransaction(Transaction):
