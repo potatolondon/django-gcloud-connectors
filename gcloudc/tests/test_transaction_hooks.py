@@ -65,25 +65,6 @@ class TestConnectionOnCommit(TransactionTestCase):
             self.assertNotified([])
         self.assertDone([1])
 
-    def test_discards_hooks_from_rolled_back_savepoint(self):
-        with transaction.atomic():
-            # one successful savepoint
-            with transaction.atomic():
-                self.do(1)
-            # one failed savepoint
-            try:
-                with transaction.atomic():
-                    self.do(2)
-                    raise ForcedError()
-            except ForcedError:
-                pass
-            # another successful savepoint
-            with transaction.atomic():
-                self.do(3)
-
-        # only hooks registered during successful savepoints execute
-        self.assertDone([1, 3])
-
     def test_no_hooks_run_from_failed_transaction(self):
         """If outer transaction fails, no hooks from within it run."""
         try:
@@ -99,7 +80,7 @@ class TestConnectionOnCommit(TransactionTestCase):
     def test_inner_savepoint_rolled_back_with_outer(self):
         with transaction.atomic():
             try:
-                with transaction.atomic():
+                with transaction.atomic(independent=True):
                     with transaction.atomic():
                         self.do(1)
                     raise ForcedError()
@@ -108,30 +89,6 @@ class TestConnectionOnCommit(TransactionTestCase):
             self.do(2)
 
         self.assertDone([2])
-
-    def test_no_savepoints_atomic_merged_with_outer(self):
-        with transaction.atomic():
-            with transaction.atomic():
-                self.do(1)
-                try:
-                    with transaction.atomic(savepoint=False):
-                        raise ForcedError()
-                except ForcedError:
-                    pass
-
-        self.assertDone([])
-
-    def test_inner_savepoint_does_not_affect_outer(self):
-        with transaction.atomic():
-            with transaction.atomic():
-                self.do(1)
-                try:
-                    with transaction.atomic():
-                        raise ForcedError()
-                except ForcedError:
-                    pass
-
-        self.assertDone([1])
 
     def test_runs_hooks_in_order_registered(self):
         with transaction.atomic():

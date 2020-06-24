@@ -7,8 +7,12 @@ from django.db import (
     DEFAULT_DB_ALIAS,
     connections,
 )
+from django.db.transaction import TransactionManagementError
 from gcloudc.context_decorator import ContextDecorator
 from gcloudc.db.backends.datastore import transaction as datastore_transaction
+
+
+TransactionManagementError = TransactionManagementError
 
 
 class Atomic(ContextDecorator):

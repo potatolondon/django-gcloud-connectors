@@ -28,7 +28,7 @@ class TransactionTests(TestCase):
         try:
             with transaction.atomic():
                 connection.on_commit(increment)
-                self.assertEqual(increment.x, 0)
+                self.assertEqual(increment.x, 1)
                 raise ValueError()
         except ValueError:
             pass
