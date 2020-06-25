@@ -1,6 +1,6 @@
-# Django GCloud Connectors (DGC)
+# Django GCloud Connectors (gcloudc)
 
-**Note: This project is now living in GitLab: https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors**
+**Note: This project is now living in [GitLab](https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors)**
 
 The aim of this project is to create Django database connector / backend for Google Cloud.
 
@@ -11,6 +11,16 @@ This is the continuation of the Datastore connector from the [Djangae project](h
 but converted to use the [Cloud Datastore API](https://googleapis.github.io/google-cloud-python/latest/datastore/) on Python 3.
 
 If you are interested in submitting a patch, please refer to `CONTRIBUTING.md`
+
+---
+
+## Looking for Commercial Support?
+
+Potato offers Commercial Support for all its Open Source projects and we can tailor a support package to your needs. 
+
+If you're interested in commercial support, training, or consultancy then go ahead and contact us at [opensource@potatolondon.com](mailto:opensource@potatolondon.com)
+
+---
 
 
 ## Running the tests
