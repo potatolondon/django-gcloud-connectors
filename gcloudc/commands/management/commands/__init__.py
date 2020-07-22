@@ -82,7 +82,7 @@ class CloudDatastoreRunner:
 
         return args
 
-    def _wait_for_datastore(self):
+    def _wait_for_datastore(self, **kwargs):
         TIMEOUT = 60.0
 
         start = datetime.now()
@@ -93,7 +93,7 @@ class CloudDatastoreRunner:
         failures = 0
         while True:
             try:
-                response = urlopen("http://127.0.0.1:%s/" % _DEFAULT_PORT)
+                response = urlopen("http://127.0.0.1:%s/" % kwargs["port"])
             except (HTTPError, URLError):
                 failures += 1
                 time.sleep(1)
@@ -121,7 +121,7 @@ class CloudDatastoreRunner:
         env = os.environ.copy()
         self._process = subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env)
 
-        self._wait_for_datastore()
+        self._wait_for_datastore(**kwargs)
 
     def _stop_emulator(self):
         print("Stopping Cloud Datastore Emulator")
