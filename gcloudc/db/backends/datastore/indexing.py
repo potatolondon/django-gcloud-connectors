@@ -99,7 +99,7 @@ def load_special_indexes(connection):
     def _read_file(filepath):
         # Load any existing indexes
         with open(filepath, "r") as stream:
-            data = yaml.load(stream)
+            data = yaml.safe_load(stream)
         return data
 
     project_index_file = _get_project_index_file(connection)
