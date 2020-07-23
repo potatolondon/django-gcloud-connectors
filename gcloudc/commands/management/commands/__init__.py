@@ -1,3 +1,4 @@
+import contextlib
 import json
 import logging
 import os
@@ -40,14 +41,12 @@ class CloudDatastoreRunner:
         )
 
     def execute(self, *args, **kwargs):
-        try:
-            if kwargs.get("datastore", True):
-                self._check_gcloud_components()
-                self._start_emulator(**kwargs)
-
+        if kwargs.get("datastore", True):
+            self._check_gcloud_components()
+            with self._datastore_emulator(**kwargs):
+                super().execute(*args, **kwargs)
+        else:
             super().execute(*args, **kwargs)
-        finally:
-            self._stop_emulator()
 
     def _check_gcloud_components(self):
         finished_process = subprocess.run(_COMPONENTS_LIST_COMMAND, stdout=subprocess.PIPE, encoding="utf-8")
@@ -104,7 +103,7 @@ class CloudDatastoreRunner:
 
             if response.status == 200:
                 # Give things a second to really boot
-                time.sleep(1)
+                time.sleep(2)
                 break
 
             if (datetime.now() - start).total_seconds() > TIMEOUT:
@@ -112,22 +111,20 @@ class CloudDatastoreRunner:
 
             time.sleep(1)
 
-    def _start_emulator(self, **kwargs):
+    @contextlib.contextmanager
+    def _datastore_emulator(self, **kwargs):
         print("Starting Cloud Datastore Emulator")
 
         os.environ["DATASTORE_EMULATOR_HOST"] = "127.0.0.1:%s" % kwargs["port"]
         os.environ["DATASTORE_PROJECT_ID"] = "test"
 
         env = os.environ.copy()
-        self._process = subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env)
-
-        self._wait_for_datastore(**kwargs)
-
-    def _stop_emulator(self):
-        print("Stopping Cloud Datastore Emulator")
-        if self._process:
-            self._process.kill()
-            self._process = None
+        with subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env) as proc:
+            self._wait_for_datastore(**kwargs)
+            yield proc
+            print("Stopping Cloud Datastore Emulator")
+            proc.terminate()
+            proc.wait()
 
 
 def locate_command(name):
