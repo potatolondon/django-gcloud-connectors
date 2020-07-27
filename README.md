@@ -39,8 +39,7 @@ tox -e py37 -- --failfast
 # Automatic Cloud Datastore Emulator startup
 
 gcloudc provides overrides for the `runserver` and `test` commands which
-start and stop a Cloud Datastore Emulator instance. To enable this functionality
-just add `gcloudc.commands` to your `INSTALLED_APPS` setting.
+start and stop a Cloud Datastore Emulator instance. To enable this functionality add `gcloudc.commands` _at the beginning_ of your `INSTALLED_APPS` setting.
 
 # Release process
 
