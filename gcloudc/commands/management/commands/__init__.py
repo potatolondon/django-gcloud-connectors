@@ -13,6 +13,7 @@ from urllib.request import urlopen
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import load_command_class
+from django.utils.autoreload import DJANGO_AUTORELOAD_ENV
 
 _COMPONENTS_LIST_COMMAND = "gcloud components list --format=json".split()
 _REQUIRED_COMPONENTS = set(["beta", "cloud-datastore-emulator", "core"])
@@ -43,7 +44,7 @@ class CloudDatastoreRunner:
 
     def execute(self, *args, **kwargs):
         try:
-            if kwargs.get("datastore", True):
+            if kwargs.get("datastore", True) and os.environ.get(DJANGO_AUTORELOAD_ENV) != "true":
                 self._check_gcloud_components()
                 self._start_emulator(**kwargs)
 
