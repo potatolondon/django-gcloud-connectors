@@ -20,6 +20,8 @@ _REQUIRED_COMPONENTS = set(["beta", "cloud-datastore-emulator", "core"])
 _BASE_COMMAND = "gcloud beta emulators datastore start --consistency=1.0 --quiet --project=test".split()
 _DEFAULT_PORT = 9090
 
+logger = logging.getLogger(__name__)
+
 
 class CloudDatastoreRunner:
     USE_MEMORY_DATASTORE_BY_DEFAULT = False
@@ -75,7 +77,7 @@ class CloudDatastoreRunner:
         args = ["--host-port=127.0.0.1:%s" % kwargs.get("port", _DEFAULT_PORT)]
 
         if kwargs["use_memory_datastore"]:
-            print("Using in-memory datastore")
+            logger.info("Using in-memory datastore")
             args.append("--no-store-on-disk")
         else:
             args.append("--data-dir=%s" % self._datastore_filename())
@@ -87,7 +89,7 @@ class CloudDatastoreRunner:
 
         start = datetime.now()
 
-        print("Waiting for Cloud Datastore Emulator...")
+        logger.info("Waiting for Cloud Datastore Emulator...")
         time.sleep(1)
 
         failures = 0
@@ -99,7 +101,8 @@ class CloudDatastoreRunner:
                 time.sleep(1)
                 if failures > 5:
                     # Only start logging if this becomes persistent
-                    logging.exception("Error connecting to the Cloud Datastore Emulator. Retrying...")
+                    logger.exception(
+                        "Error connecting to the Cloud Datastore Emulator. Retrying...")
                 continue
 
             if response.status == 200:
@@ -113,7 +116,7 @@ class CloudDatastoreRunner:
             time.sleep(1)
 
     def _start_emulator(self, **kwargs):
-        print("Starting Cloud Datastore Emulator")
+        logger.info("Starting Cloud Datastore Emulator")
 
         os.environ["DATASTORE_EMULATOR_HOST"] = "127.0.0.1:%s" % kwargs["port"]
         os.environ["DATASTORE_PROJECT_ID"] = "test"
@@ -124,7 +127,7 @@ class CloudDatastoreRunner:
         self._wait_for_datastore(**kwargs)
 
     def _stop_emulator(self):
-        print("Stopping Cloud Datastore Emulator")
+        logger.info("Stopping Cloud Datastore Emulator")
         if self._process:
             self._process.kill()
             self._process = None
