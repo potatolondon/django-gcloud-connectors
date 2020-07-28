@@ -129,7 +129,8 @@ class CloudDatastoreRunner:
     def _stop_emulator(self):
         logger.info("Stopping Cloud Datastore Emulator")
         if self._process:
-            self._process.kill()
+            self._process.terminate()
+            self._process.wait()
             self._process = None
 
 
