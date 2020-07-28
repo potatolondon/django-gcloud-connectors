@@ -107,7 +107,7 @@ class CloudDatastoreRunner:
 
             if response.status == 200:
                 # Give things a second to really boot
-                time.sleep(1)
+                time.sleep(2)
                 break
 
             if (datetime.now() - start).total_seconds() > TIMEOUT:
