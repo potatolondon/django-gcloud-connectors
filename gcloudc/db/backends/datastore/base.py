@@ -652,13 +652,65 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         # Override this to do nothing, because it's not relevant to the Datastore
         pass
 
-    @property
-    def in_atomic_block(self):
-        from gcloudc.db import transaction
-        return transaction.in_atomic_block(using=self.alias)
+    def on_commit(self, func):
+        # FIXME: This override needs to go away when we implement in_atomic_block
+        # on the connection - which we can't do unless we move wholesale to Django's
+        # atomic decorator (see issue #10)
 
-    @in_atomic_block.setter
-    def in_atomic_block(self, v):
-        # We make this a no-op, as we currently rely on
-        # the value returned by gcloudc.db.transaction
-        pass
+        from django.db.transaction import TransactionManagementError
+        from gcloudc.db.transaction import in_atomic_block
+
+        if in_atomic_block(using=self.name or "default"):
+            # Transaction in progress; save for execution on commit.
+            self.run_on_commit.append((set(self.savepoint_ids), func))
+        elif not self.get_autocommit():
+            raise TransactionManagementError('on_commit() cannot be used in manual transaction management')
+        else:
+            # No transaction in progress and in autocommit mode; execute
+            # immediately.
+            func()
+
+    def run_and_clear_commit_hooks(self):
+        # FIXME: This override needs to go away when we implement in_atomic_block
+        # on the connection - which we can't do unless we move wholesale to Django's
+        # atomic decorator (see issue #10)
+
+        from django.db.transaction import TransactionManagementError
+        from gcloudc.db.transaction import in_atomic_block
+
+        if in_atomic_block(using=self.name or "default"):
+            raise TransactionManagementError(
+                "This is forbidden when an 'atomic' block is active."
+            )
+
+        current_run_on_commit = self.run_on_commit
+        self.run_on_commit = []
+        while current_run_on_commit:
+            sids, func = current_run_on_commit.pop(0)
+            func()
+
+    def close(self):
+        """Close the connection to the database."""
+
+        from gcloudc.db.transaction import in_atomic_block
+
+        # FIXME: This override needs to go away when we implement in_atomic_block
+        # on the connection - which we can't do unless we move wholesale to Django's
+        # atomic decorator (see issue #10)
+
+        self.validate_thread_sharing()
+        self.run_on_commit = []
+
+        # Don't call validate_no_atomic_block() to avoid making it difficult
+        # to get rid of a connection in an invalid state. The next connect()
+        # will reset the transaction state anyway.
+        if self.closed_in_transaction or self.connection is None:
+            return
+        try:
+            self._close()
+        finally:
+            if in_atomic_block(using=self.name or "default"):
+                self.closed_in_transaction = True
+                self.needs_rollback = True
+            else:
+                self.connection = None
