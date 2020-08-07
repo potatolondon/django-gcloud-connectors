@@ -13,6 +13,23 @@ python37:
     reports:
       junit: .reports/django-tests.xml
 
+python37-djangae:
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
+  stage: test
+  before_script:
+    - mkdir .reports
+    - git clone https://github.com/potatolondon/djangae.git
+  script:
+    - cd djangae
+    - tox -e py37  # FIXME: We just really want to create the env
+    - source .tox/py37/bin/activate # Active the venv and install this version of cloud connectors
+    - pip install git+https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors.git@$CI_COMMIT_SHA
+    - tox -e py37  # Run the Djangae tests again
+  artifacts:
+    reports:
+      junit: .reports/djangae-tests.xml
+
+
 python36:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
   stage: test
