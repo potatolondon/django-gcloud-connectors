@@ -21,10 +21,12 @@ python37-djangae:
     - git clone https://github.com/potatolondon/djangae.git
   script:
     - cd djangae
-    - tox -e py37  # FIXME: We just really want to create the env
+    # Hack. We want to setup the tox env, so we pass a none existent test to the Django test runner
+    # which will fail, then we update the deps, and then run it for real
+    - tox -e py37 -- none || true
     - source .tox/py37/bin/activate # Active the venv and install this version of cloud connectors
     - pip install git+https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors.git@$CI_COMMIT_SHA
-    - tox -e py37  # Run the Djangae tests again
+    - tox -e py37  # Run the Djangae tests properly
   artifacts:
     reports:
       junit: .reports/djangae-tests.xml
