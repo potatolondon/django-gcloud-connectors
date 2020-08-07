@@ -16,7 +16,7 @@ If you are interested in submitting a patch, please refer to `CONTRIBUTING.md`
 
 ## Looking for Commercial Support?
 
-Potato offers Commercial Support for all its Open Source projects and we can tailor a support package to your needs. 
+Potato offers Commercial Support for all its Open Source projects and we can tailor a support package to your needs.
 
 If you're interested in commercial support, training, or consultancy then go ahead and contact us at [opensource@potatolondon.com](mailto:opensource@potatolondon.com)
 
@@ -44,11 +44,15 @@ start and stop a Cloud Datastore Emulator instance. To enable this functionality
 # Release process
 
 Release to pypi is managed by GitLab CI. To create a new release create the relevant tag
-and push it to the gitlab remote e.g.
+and push it to the gitlab remote. But first you should do some version fiddling...
 
 ```
-git tag 1.0.0
-git push origin 1.0.0
+1. Update the version in setup.py to the new version by removing the 'a' suffix (most likely)
+2. Commit this change
+3. Run `git tag -a X.Y.Z -m "Some description"
+4. Run `git push origin master && git push --tags`
+5. Open setup.py again, bump to the *next* release version, use an 'a' suffix
+6. Run `git commit -am "Bump to alpha version" && git push origin master`
 ```
 
 This will trigger a pipeline that will publish the package in test.pypi.org.
