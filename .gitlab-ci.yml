@@ -13,6 +13,25 @@ python37:
     reports:
       junit: .reports/django-tests.xml
 
+python37-djangae:
+  image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python37:latest
+  stage: test
+  before_script:
+    - mkdir .reports
+    - git clone https://github.com/potatolondon/djangae.git
+  script:
+    - cd djangae
+    # Hack. We want to setup the tox env, so we pass a none existent test to the Django test runner
+    # which will fail, then we update the deps, and then run it for real
+    - tox -e py37 -- none || true
+    - source .tox/py37/bin/activate # Active the venv and install this version of cloud connectors
+    - pip install git+https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors.git@$CI_COMMIT_SHA
+    - tox -e py37  # Run the Djangae tests properly
+  artifacts:
+    reports:
+      junit: .reports/djangae-tests.xml
+
+
 python36:
   image: registry.gitlab.com/potato-oss/google-cloud/django-gcloud-connectors/python36:latest
   stage: test
