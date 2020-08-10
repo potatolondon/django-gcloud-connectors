@@ -15,7 +15,7 @@ AUTHOR_EMAIL = "mail@p.ota.to"
 if os.environ.get('CI_COMMIT_TAG'):
     VERSION = os.environ['CI_COMMIT_TAG']
 else:
-    VERSION = '0.2.2'
+    VERSION = '0.3.0a'
 
 setup(
     name=NAME,
