@@ -678,7 +678,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         from django.db.transaction import TransactionManagementError
         from gcloudc.db.transaction import in_atomic_block
 
-        if in_atomic_block(using=self.name or "default"):
+        if in_atomic_block(using=self.alias or "default"):
             raise TransactionManagementError(
                 "This is forbidden when an 'atomic' block is active."
             )
