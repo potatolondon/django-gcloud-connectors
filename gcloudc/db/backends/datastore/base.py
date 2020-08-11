@@ -172,6 +172,8 @@ class Cursor(object):
 
 MAXINT = 9223372036854775808
 
+_BULK_BATCH_SIZE_SETTING = "BULK_BATCH_SIZE"
+
 
 class DatabaseOperations(BaseDatabaseOperations):
     compiler_module = "gcloudc.db.backends.datastore.compiler"
@@ -189,6 +191,10 @@ class DatabaseOperations(BaseDatabaseOperations):
         # This value is used in cascade deletions, and also on bulk insertions
         # This is the limit of the number of entities that can be manipulated in
         # a single transaction
+
+        settings_dict = self.connection.settings_dict
+        if _BULK_BATCH_SIZE_SETTING in settings_dict['OPTIONS']:
+            return int(settings_dict['OPTIONS'][_BULK_BATCH_SIZE_SETTING])
         return 500
 
     def quote_name(self, name):
