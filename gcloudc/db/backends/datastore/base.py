@@ -660,7 +660,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         from django.db.transaction import TransactionManagementError
         from gcloudc.db.transaction import in_atomic_block
 
-        if in_atomic_block(using=self.name or "default"):
+        if in_atomic_block(using=self.alias or "default"):
             # Transaction in progress; save for execution on commit.
             self.run_on_commit.append((set(self.savepoint_ids), func))
         elif not self.get_autocommit():
@@ -709,7 +709,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         try:
             self._close()
         finally:
-            if in_atomic_block(using=self.name or "default"):
+            if in_atomic_block(using=self.alias or "default"):
                 self.closed_in_transaction = True
                 self.needs_rollback = True
             else:
