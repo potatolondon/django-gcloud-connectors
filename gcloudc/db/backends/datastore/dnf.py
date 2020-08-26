@@ -1,4 +1,5 @@
 import copy
+import logging
 from itertools import product
 
 from django.conf import settings
@@ -9,6 +10,9 @@ from .query import WhereNode
 
 # Maximum number of subqueries in a multiquery
 DEFAULT_MAX_ALLOWABLE_QUERIES = 100
+
+
+logger = logging.getLogger(__name__)
 
 
 def preprocess_node(node, negated):
@@ -283,6 +287,7 @@ def normalize_query(query):
                 key = (node.column, node.operator)
                 if key in seen:
                     altered = True
+                    logger.info("Type is %s and %s", type(seen[key].value), type(node.value))
                     if node.operator in ('<', '<='):
                         seen[key].value = min(seen[key].value, node.value)
                     elif node.operator in ('>', '>='):
