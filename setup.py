@@ -37,7 +37,7 @@ setup(
     ],
     install_requires=[
         'Django>=2.0,<3.0',
-        'pyyaml==5.1.1',
+        'pyyaml>=5.3.1',
         'google-cloud-datastore==1.9.0',
         'sleuth-mock==0.1',
         'pyuca==1.2',
