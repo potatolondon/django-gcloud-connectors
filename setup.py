@@ -6,7 +6,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 NAME = 'django-gcloud-connectors'
 
 DESCRIPTION = 'A Django library for connecting to Google Cloud Datastore from Python 3 runtimes.'
-URL = 'https://gitlab.com/potato-oss/google-cloud/gcloud-storage-emulator'
+URL = 'https://gitlab.com/potato-oss/google-cloud/django-gcloud-connectors'
 LONG_DESCRIPTION = open(os.path.join(os.path.dirname(__file__), 'README.md')).read()
 
 AUTHOR = "Potato London Ltd."
