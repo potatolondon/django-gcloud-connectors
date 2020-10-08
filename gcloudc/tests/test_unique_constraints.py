@@ -302,8 +302,6 @@ class TestUniqueConstraints(TestCase):
         class Child(Base):
             pass
 
-        # This used to raise an integrity error because the field was checked
-        # for both base and Child class
         child = Child.objects.create(a="a", b="b")
         self.assertIsNotNone(child)
 
@@ -326,8 +324,6 @@ class TestUniqueConstraints(TestCase):
             class Meta():
                 unique_together = ["a", "b"]
 
-        # This used to raise an integrity error because the field was checked
-        # for both base and Child class
         child = Child.objects.create(a="a", b="b")
         self.assertIsNotNone(child)
 
@@ -353,11 +349,30 @@ class TestUniqueConstraints(TestCase):
             class Meta():
                 unique_together = ["a", "b"]
 
-        # This used to raise an integrity error because the field was checked
-        # for both base and Child class
         child = Child.objects.create(a="a", b="b")
         self.assertIsNotNone(child)
 
         # Check that actual integrity issues are reported
         with self.assertRaises(IntegrityError):
             child = Child.objects.create(a="a", b="b")
+
+    def test_unique_in_abstract_parent(self):
+        """
+        Test that a polymodel unique constraint doesn't blow when the parent
+        class has a unique constraint
+        """
+        class Base(Model):
+            unique_field = CharField(unique=True)
+
+            class Meta():
+                abstract = True
+
+        class Child(Base):
+            pass
+
+        child = Child.objects.create(unique_field="unique_value")
+        self.assertIsNotNone(child)
+
+        # Check that actual integrity issues are reported
+        with self.assertRaises(IntegrityError):
+            Child.objects.create(unique_field="unique_value")
