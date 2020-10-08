@@ -14,14 +14,22 @@ def _has_unique_constraints(model_or_instance):
     Returns a boolean to indicate if the given model has any type of unique
     constraint defined (e.g. unique on a single field, or meta.unique_together).
 
+    To support concrete model inheritance we state that uniqueness checks
+    should only be performed on the class that the defines the unique constraint.
+
     Note - you can see a much more verbose implementation of this in
     django.db.models.base.Model._get_unique_checks() - but we implement our
     own logic to exit early when the first constraint is found.
     """
     meta_options = model_or_instance._meta
-
-    unique_fields = meta_options.unique_together
-    unique_together = any(field.unique for field in meta_options.fields)
+    # we may get an instance here, so ensure we have a reference to the
+    # model class
+    model_class = meta_options.model
+    unique_together = meta_options.unique_together
+    unique_fields = any(
+        field.unique and field.model == model_class
+        for field in meta_options.fields
+    )
 
     return any([unique_fields, unique_together])
 
@@ -155,6 +163,9 @@ def _unique_combinations(model, ignore_pk=False):
         ['email'], # implicit unique constraint from primary_key=True
         ['first_name', 'second_name'] # from model meta unique_together
     ]
+
+    Fields with unique constraint defined in a concrete parent model are ingored
+    since they're checked when that model is saved
     """
     # first grab all the unique together constraints
     unique_constraints = [list(together_constraint) for together_constraint in model._meta.unique_together]
@@ -164,7 +175,7 @@ def _unique_combinations(model, ignore_pk=False):
         if field.primary_key and ignore_pk:
             continue
 
-        if field.unique:
+        if field.unique and field.model == model:
             unique_constraints.append([field.name])
 
     # the caller should sort each inner iterable really - but we do this here

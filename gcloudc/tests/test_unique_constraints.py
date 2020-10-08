@@ -1,4 +1,6 @@
+from gcloudc.db.models.fields.charfields import CharField
 from unittest import skip
+from django.db.models import Model
 
 import sleuth
 from django.db import connection
@@ -247,3 +249,130 @@ class TestUniqueConstraints(TestCase):
         # the entity in question should not have been deleted, as error in the
         # transactions atomic block should revert all changes
         user.refresh_from_db()
+
+    def test_polymodels_with_base_unique(self):
+        """
+        Test that a polymodel unique constraint doesn't blow when the parent
+        class has a unique constraint
+        """
+        class Base(Model):
+            unique_field = CharField(unique=True)
+
+        class Child(Base):
+            pass
+
+        # This used to raise an integrity error because the field was checked
+        # for both base and Child class
+        child = Child.objects.create(unique_field="unique_value")
+        self.assertIsNotNone(child)
+
+        # Check that actual integrity issues are reported
+        with self.assertRaises(IntegrityError):
+            Child.objects.create(unique_field="unique_value")
+
+    def test_polymodels_with_child_unique(self):
+        """
+        Test that a polymodel unique constraint doesn't blow when the child
+        class has a unique constraint
+        """
+        class Base(Model):
+            pass
+
+        class Child(Base):
+            unique_field = CharField(unique=True)
+
+        child = Child.objects.create(unique_field="unique_value")
+        self.assertIsNotNone(child)
+
+        with self.assertRaises(IntegrityError):
+            Child.objects.create(unique_field="unique_value")
+
+    def test_polymodels_with_base_unique_together(self):
+        """
+        Test that a polymodel unique_together constraint is respected when
+        in the parent model
+        """
+        class Base(Model):
+            a = CharField()
+            b = CharField()
+
+            class Meta():
+                unique_together = ["a", "b"]
+
+        class Child(Base):
+            pass
+
+        child = Child.objects.create(a="a", b="b")
+        self.assertIsNotNone(child)
+
+        # Check that actual integrity issues are reported
+        with self.assertRaises(IntegrityError):
+            child = Child.objects.create(a="a", b="b")
+
+    def test_polymodels_with_child_unique_together(self):
+        """
+        Test that a polymodel unique_together constraint is respected when
+        in the child model
+        """
+        class Base(Model):
+            pass
+
+        class Child(Base):
+            a = CharField()
+            b = CharField()
+
+            class Meta():
+                unique_together = ["a", "b"]
+
+        child = Child.objects.create(a="a", b="b")
+        self.assertIsNotNone(child)
+
+        # Check that actual integrity issues are reported
+        with self.assertRaises(IntegrityError):
+            child = Child.objects.create(a="a", b="b")
+
+    def test_polymodels_with_cross_model_unique_together(self):
+        """
+        Test that a polymodel unique_together constraint is respected when
+        it references fields across the hierarchy
+
+        Note: this wouldn't work with a SQL backend because unique constraint
+        are per-table. Since we are doing read-before-write to enforce  unique
+        constraint, table structures is not a problem.
+        """
+        class Base(Model):
+            a = CharField()
+
+        class Child(Base):
+            b = CharField()
+
+            class Meta():
+                unique_together = ["a", "b"]
+
+        child = Child.objects.create(a="a", b="b")
+        self.assertIsNotNone(child)
+
+        # Check that actual integrity issues are reported
+        with self.assertRaises(IntegrityError):
+            child = Child.objects.create(a="a", b="b")
+
+    def test_unique_in_abstract_parent(self):
+        """
+        Test that a polymodel unique constraint doesn't blow when the parent
+        class has a unique constraint
+        """
+        class Base(Model):
+            unique_field = CharField(unique=True)
+
+            class Meta():
+                abstract = True
+
+        class Child(Base):
+            pass
+
+        child = Child.objects.create(unique_field="unique_value")
+        self.assertIsNotNone(child)
+
+        # Check that actual integrity issues are reported
+        with self.assertRaises(IntegrityError):
+            Child.objects.create(unique_field="unique_value")
