@@ -604,7 +604,7 @@ def reserve_id(connection, kind, id_or_name, namespace):
         return
 
     gclient = connection.connection.gclient
-    gclient.reserve_ids(gclient.key(kind, id_or_name, namespace=namespace), 1)
+    gclient.reserve_ids_sequential(gclient.key(kind, id_or_name, namespace=namespace), 1)
 
 
 def perform_unique_checks(model, rpc, primary, test_fn):
