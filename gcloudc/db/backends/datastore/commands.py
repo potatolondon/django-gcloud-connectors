@@ -589,13 +589,16 @@ class FlushCommand(object):
     def execute(self):
         table = self.table
         query = transaction._rpc(self.connection).query(kind=table, namespace=self.namespace)
-
         query.keys_only()
 
-        results = [x.key for x in query.fetch()]
+        # The local datastore emulator explodes if you try to delete more than 500
+        # things in a single batch. So we just iterate in batches of 500.
+        limit = 500
+
+        results = [x.key for x in query.fetch(limit=limit)]
         while results:
             transaction._rpc(self.connection).delete(results)
-            results = [x.key for x in query.fetch()]
+            results = [x.key for x in query.fetch(limit=limit)]
 
 
 def reserve_id(connection, kind, id_or_name, namespace):
