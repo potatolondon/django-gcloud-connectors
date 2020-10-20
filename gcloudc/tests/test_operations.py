@@ -1,7 +1,9 @@
 import sleuth
+from django.conf import settings
+from django.core.management import call_command
+
 from . import TestCase
 from .models import TestUserTwo
-from django.conf import settings
 
 
 class OperationsTests(TestCase):
@@ -25,3 +27,11 @@ class OperationsTests(TestCase):
 
             self.assertEqual(bbs.call_count, 2)
             self.assertEqual(len(bbs.calls[0].args[3]), 25)
+
+    def test_flush_large_table(self):
+        for i in range(502):
+            TestUserTwo.objects.create(username=str(i))
+
+        self.assertEqual(TestUserTwo.objects.count(), 502)
+        call_command('flush', interactive=False)
+        self.assertFalse(TestUserTwo.objects.exists())
