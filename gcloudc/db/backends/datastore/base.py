@@ -681,13 +681,13 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         # on the connection - which we can't do unless we move wholesale to Django's
         # atomic decorator (see issue #10)
 
-        from django.db.transaction import TransactionManagementError
         from gcloudc.db.transaction import in_atomic_block
 
         if in_atomic_block(using=self.alias or "default"):
-            raise TransactionManagementError(
-                "This is forbidden when an 'atomic' block is active."
-            )
+            # FIXME: This should throw an error, but we can't because
+            # Django's atomic blocks toggle autocommit in get_or_create
+            # We need to unify with Django's decorators (see issue #10)
+            return
 
         current_run_on_commit = self.run_on_commit
         self.run_on_commit = []

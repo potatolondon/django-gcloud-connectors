@@ -40,6 +40,19 @@ class TransactionTests(TestCase):
 
         self.assertEqual(increment.x, 1)  # Still the same
 
+    def test_get_or_create(self):
+        """
+            get_or_create uses Django's atomic decorator under the hood
+            this can cause issues if called within a gcloudc atomic block
+        """
+
+        with transaction.atomic():
+            user, created = TestUser.objects.get_or_create(username="foo")
+            self.assertTrue(created)
+
+            user, created = TestUser.objects.get_or_create(username="foo")
+            self.assertFalse(created)
+
     def test_repeated_usage_in_a_loop(self):
         pk = TestUser.objects.create(username="foo").pk
         for i in range(4):
