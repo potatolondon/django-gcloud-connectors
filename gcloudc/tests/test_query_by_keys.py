@@ -34,7 +34,15 @@ class QueryByKeysTest(TestCase):
         self.assertCountEqual(results, [1, 5])
 
     def test_large_number_of_keys(self):
+        keys = []
+
+        for i in range(1500):
+            keys.append(NullableFieldModel.objects.create(pk=i + 1).pk)
+
         try:
-            list(NullableFieldModel.objects.filter(pk__in=list(range(1, 1500))))
+            results = list(NullableFieldModel.objects.filter(pk__in=keys))
         except google.api_core.exceptions.InvalidArgument:
             self.fail("Didn't correctly deal with a large number of keys")
+
+        self.assertEqual(len(results), 1500)
+        self.assertCountEqual([x.pk for x in results], keys)
