@@ -122,6 +122,10 @@ class CloudDatastoreRunner:
         os.environ["DATASTORE_EMULATOR_HOST"] = "127.0.0.1:%s" % kwargs["port"]
         os.environ["DATASTORE_PROJECT_ID"] = "test"
 
+        # The Cloud Datastore emulator regularly runs out of heap space
+        # so set a higher max
+        os.environ["JAVA_OPTS"] = "-Xms512M -Xmx1024M"
+
         env = os.environ.copy()
         self._process = subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env)
 
