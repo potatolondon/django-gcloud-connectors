@@ -18,7 +18,7 @@ from django.utils.autoreload import DJANGO_AUTORELOAD_ENV
 _COMPONENTS_LIST_COMMAND = "gcloud components list --format=json".split()
 _REQUIRED_COMPONENTS = set(["beta", "cloud-datastore-emulator", "core"])
 
-_BASE_COMMAND = "gcloud beta emulators datastore start --consistency=1.0 --quiet --project=test".split()
+_BASE_COMMAND = "gcloud beta emulators datastore start --user-output-enabled=false --consistency=1.0 --quiet --project=test".split()
 _DEFAULT_PORT = 9090
 
 logger = logging.getLogger(__name__)
