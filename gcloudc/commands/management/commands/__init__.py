@@ -124,7 +124,7 @@ class CloudDatastoreRunner:
 
         # The Cloud Datastore emulator regularly runs out of heap space
         # so set a higher max
-        os.environ["JAVA_OPTS"] = "-Xms512M -Xmx1024M"
+        os.environ["_JAVA_OPTIONS"] = "-Xms512M -Xmx1024M"
 
         env = os.environ.copy()
         self._process = subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env)
