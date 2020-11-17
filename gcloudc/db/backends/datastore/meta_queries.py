@@ -372,7 +372,17 @@ class QueryByKeys(object):
                 else:
                     results = AsyncMultiQuery(multi_query, orderings).fetch(limit=to_fetch)
             else:
-                results = client.get([x for x in self.queries_by_key.keys()])
+                # Can pass 1000 keys to a datastore.Get, so if there are more we need to do them
+                # in multiple gets
+                MAX_ALLOWED_GET = 1000
+
+                all_keys = list(self.queries_by_key.keys())
+                next_keys, remaining_keys = all_keys[:MAX_ALLOWED_GET], all_keys[MAX_ALLOWED_GET:]
+
+                results = []
+                while next_keys:
+                    results.extend(client.get(next_keys))
+                    next_keys, remaining_keys = remaining_keys[:MAX_ALLOWED_GET], remaining_keys[MAX_ALLOWED_GET:]
 
         def iter_results(results):
             returned = 0

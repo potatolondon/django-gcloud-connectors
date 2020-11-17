@@ -18,7 +18,7 @@ from django.utils.autoreload import DJANGO_AUTORELOAD_ENV
 _COMPONENTS_LIST_COMMAND = "gcloud components list --format=json".split()
 _REQUIRED_COMPONENTS = set(["beta", "cloud-datastore-emulator", "core"])
 
-_BASE_COMMAND = "gcloud beta emulators datastore start --consistency=1.0 --quiet --project=test".split()
+_BASE_COMMAND = "gcloud beta emulators datastore start --user-output-enabled=false --consistency=1.0 --quiet --project=test".split()  # noqa
 _DEFAULT_PORT = 9090
 
 logger = logging.getLogger(__name__)
@@ -121,6 +121,10 @@ class CloudDatastoreRunner:
 
         os.environ["DATASTORE_EMULATOR_HOST"] = "127.0.0.1:%s" % kwargs["port"]
         os.environ["DATASTORE_PROJECT_ID"] = "test"
+
+        # The Cloud Datastore emulator regularly runs out of heap space
+        # so set a higher max
+        os.environ["JDK_JAVA_OPTIONS"] = "-Xms512M -Xmx1024M"
 
         env = os.environ.copy()
         self._process = subprocess.Popen(_BASE_COMMAND + self._get_args(**kwargs), env=env)

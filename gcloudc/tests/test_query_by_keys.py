@@ -1,3 +1,5 @@
+import google
+
 from . import TestCase
 from .models import NullableFieldModel
 
@@ -30,3 +32,17 @@ class QueryByKeysTest(TestCase):
         ).order_by("nullable").values_list("pk", flat=True)
 
         self.assertCountEqual(results, [1, 5])
+
+    def test_large_number_of_keys(self):
+        keys = []
+
+        for i in range(1001):
+            keys.append(NullableFieldModel.objects.create(pk=i + 1).pk)
+
+        try:
+            results = list(NullableFieldModel.objects.filter(pk__in=keys))
+        except google.api_core.exceptions.InvalidArgument:
+            self.fail("Didn't correctly deal with a large number of keys")
+
+        self.assertEqual(len(results), 1001)
+        self.assertCountEqual([x.pk for x in results], keys)
