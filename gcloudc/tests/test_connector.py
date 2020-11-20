@@ -25,6 +25,7 @@ from django.db import (
     IntegrityError,
     NotSupportedError,
 )
+from django.db import connection
 from django.db import connection as default_connection
 from django.db import models
 from django.db.models.query import Q
@@ -32,13 +33,16 @@ from django.forms import ModelForm
 from django.forms.models import modelformset_factory
 from django.test import RequestFactory
 from django.test.utils import override_settings
+from django.urls import path
 from django.utils import six
 from django.utils.safestring import SafeText
 from django.utils.six.moves import range
 from django.utils.timezone import make_aware
+from google.cloud.datastore import key
 from google.cloud.datastore.entity import Entity
 
 from gcloudc.db.backends.datastore import (
+    caching,
     indexing,
     transaction,
 )
@@ -740,6 +744,11 @@ class ModelFormsetTest(TestCase):
         TestModelFormSet(request.POST, request.FILES)
 
 
+urlpatterns = [
+    path("/", lambda x: None)
+]
+
+
 class CacheTests(TestCase):
 
     def test_cache_set(self):
@@ -751,6 +760,30 @@ class CacheTests(TestCase):
         import time
         time.sleep(1)
         self.assertEqual(cache.get('test?'), None)
+
+    @override_settings(ROOT_URLCONF="gcloudc.tests.test_connector")
+    def test_cache_cleared_on_request(self):
+        user = TestUser.objects.create(username="test")
+
+        user_key = key.Key(
+            TestUser._meta.db_table,
+            user.pk,
+            namespace=connection.settings_dict["NAMESPACE"],
+            project=connection.settings_dict["PROJECT"]
+        )
+
+        from_cache = caching.get_from_cache_by_key(
+            user_key
+        )
+
+        self.assertIsNotNone(from_cache)
+        self.client.get("/")
+
+        from_cache = caching.get_from_cache_by_key(
+            user_key
+        )
+
+        self.assertIsNone(from_cache)
 
     def test_disable_cache_decorator(self):
         user = TestUser.objects.create(username="randy", first_name="Randy")
