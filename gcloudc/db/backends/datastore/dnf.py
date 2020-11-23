@@ -287,14 +287,14 @@ def normalize_query(query):
                 if key in seen:
                     altered = True
 
-                    key_func = None
+                    cmp_kwargs = {}
                     if isinstance(seen[key].value, Key) or isinstance(node.value, Key):
-                        key_func = cmp_to_key(compare_keys)
+                        cmp_kwargs["key"] = cmp_to_key(compare_keys)
 
                     if node.operator in ('<', '<='):
-                        seen[key].value = min(seen[key].value, node.value, key=key_func)
+                        seen[key].value = min(seen[key].value, node.value, **cmp_kwargs)
                     elif node.operator in ('>', '>='):
-                        seen[key].value = max(seen[key].value, node.value, key=key_func)
+                        seen[key].value = max(seen[key].value, node.value, **cmp_kwargs)
                     elif node.operator == "=":
                         # Impossible filter! remove the AND branch entirely
                         if and_branch in top_node.children and seen[key].value != node.value:
