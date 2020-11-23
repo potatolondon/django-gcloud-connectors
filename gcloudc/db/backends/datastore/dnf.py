@@ -1,11 +1,14 @@
 import copy
+from functools import cmp_to_key
 from itertools import product
 
 from django.conf import settings
 from django.db import NotSupportedError
 from django.db.models.sql.datastructures import EmptyResultSet
+from google.cloud.datastore.key import Key
 
 from .query import WhereNode
+from .query_utils import compare_keys
 
 # Maximum number of subqueries in a multiquery
 DEFAULT_MAX_ALLOWABLE_QUERIES = 100
@@ -283,10 +286,15 @@ def normalize_query(query):
                 key = (node.column, node.operator)
                 if key in seen:
                     altered = True
+
+                    cmp_kwargs = {}
+                    if isinstance(seen[key].value, Key) or isinstance(node.value, Key):
+                        cmp_kwargs["key"] = cmp_to_key(compare_keys)
+
                     if node.operator in ('<', '<='):
-                        seen[key].value = min(seen[key].value, node.value)
+                        seen[key].value = min(seen[key].value, node.value, **cmp_kwargs)
                     elif node.operator in ('>', '>='):
-                        seen[key].value = max(seen[key].value, node.value)
+                        seen[key].value = max(seen[key].value, node.value, **cmp_kwargs)
                     elif node.operator == "=":
                         # Impossible filter! remove the AND branch entirely
                         if and_branch in top_node.children and seen[key].value != node.value:
