@@ -284,17 +284,9 @@ def normalize_query(query):
                 if key in seen:
                     altered = True
                     if node.operator in ('<', '<='):
-                        try:
-                            seen[key].value = min(seen[key].value, node.value)
-                        except TypeError:
-                            # key instances do not support '<'
-                            pass
+                        seen[key].value = min(seen[key].value, node.value)
                     elif node.operator in ('>', '>='):
-                        try:
-                            seen[key].value = max(seen[key].value, node.value)
-                        except TypeError:
-                            # key instances do not support '>'
-                            pass
+                        seen[key].value = max(seen[key].value, node.value)
                     elif node.operator == "=":
                         # Impossible filter! remove the AND branch entirely
                         if and_branch in top_node.children and seen[key].value != node.value:
