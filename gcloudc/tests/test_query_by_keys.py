@@ -1,7 +1,7 @@
 import google
 
 from . import TestCase
-from .models import NullableFieldModel
+from .models import NullableFieldModel, StringPkModel
 
 
 class QueryByKeysTest(TestCase):
@@ -46,3 +46,35 @@ class QueryByKeysTest(TestCase):
 
         self.assertEqual(len(results), 1001)
         self.assertCountEqual([x.pk for x in results], keys)
+
+    def test_multiple_pk_filters(self):
+        for i in range(10):
+            NullableFieldModel.objects.create(pk=i + 1)
+
+        qs = NullableFieldModel.objects.all()
+        self.assertEqual(qs.count(), 10)
+
+        qs = qs.filter(pk__lt=10)
+        self.assertEqual(qs.count(), 9)
+
+        qs = qs.filter(pk__gte=2)
+        self.assertEqual(qs.count(), 8)
+
+        qs = qs.filter(pk__gte=3)
+        self.assertEqual(qs.count(), 7)
+
+    def test_multiple_str_pk_filters(self):
+        for i in range(9):
+            StringPkModel.objects.create(pk=str(i + 1))
+
+        qs = StringPkModel.objects.all()
+        self.assertEqual(qs.count(), 9)
+
+        qs = qs.filter(pk__lt=str(9))
+        self.assertEqual(qs.count(), 8)
+
+        qs = qs.filter(pk__gte=str(2))
+        self.assertEqual(qs.count(), 7)
+
+        qs = qs.filter(pk__gte=str(3))
+        self.assertEqual(qs.count(), 6)
