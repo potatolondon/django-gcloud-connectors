@@ -10,7 +10,6 @@ from django.db import (
 )
 from django.db.models import AutoField
 from django.db.models.sql.datastructures import EmptyResultSet
-from django.utils import six
 
 from . import POLYMODEL_CLASS_ATTRIBUTE
 from .indexing import (
@@ -118,7 +117,7 @@ class WhereNode(object):
                     # If the value is 0 or "", then we need to manipulate the value and operator here to
                     # get the right result (given that both are invalid keys) so for both we return
                     # >= 1 or >= "\0" for strings
-                    if isinstance(value, six.integer_types):
+                    if isinstance(value, int):
                         value = 1
                     else:
                         value = "\0"
@@ -135,7 +134,7 @@ class WhereNode(object):
         if special_indexer:
             if is_pk_field:
                 column = model._meta.pk.column
-                value = six.text_type(value.id_or_name)
+                value = str(value.id_or_name)
 
             add_special_index(connections[self.using], target_field.model, column, special_indexer, operator, value)
             index_type = special_indexer.prepare_index_type(operator, value)
@@ -655,10 +654,10 @@ INVALID_ORDERING_FIELD_MESSAGE = (
 
 
 def _serialize_sql_value(value):
-    if isinstance(value, six.integer_types):
+    if isinstance(value, int):
         return value
     else:
-        return six.text_type("NULL" if value is None else value)
+        return str("NULL" if value is None else value)
 
 
 def _get_parser(query, connection=None):

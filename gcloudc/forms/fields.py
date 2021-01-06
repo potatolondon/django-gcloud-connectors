@@ -5,12 +5,17 @@ import json
 from django import forms
 from django.apps import apps
 from django.contrib import admin
-from django.contrib.admin.templatetags.admin_static import static
+
+try:
+    from django.templatetags.static import static  # Django 3+
+except ImportError:
+    # Django 2.x
+    from django.contrib.admin.templatetags.admin_static import static
+
 from django.db import models
 from django.forms.fields import MultipleChoiceField
 from django.forms.widgets import SelectMultiple
 from django.urls import reverse
-from django.utils import six
 from django.utils.encoding import force_text
 from django.utils.safestring import mark_safe
 
@@ -41,7 +46,7 @@ class ListWidget(forms.TextInput):
         if value is None:
             return None
 
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             value = value.split(",")
         return [v.strip() for v in value if v.strip()]
 
@@ -90,7 +95,7 @@ class JSONWidget(forms.Textarea):
         """ Dump the python object to JSON if it hasn't been done yet. """
         from django.core.serializers.json import DjangoJSONEncoder
 
-        if not isinstance(value, six.string_types):
+        if not isinstance(value, str):
             value = DjangoJSONEncoder().encode(value)
         return super(JSONWidget, self).render(name, value, attrs)
 
@@ -104,7 +109,7 @@ class JSONFormField(forms.CharField):
 
     def clean(self, value):
         """ (Try to) parse JSON string back to python. """
-        assert isinstance(value, six.string_types) or value is None, "JSONField value must be a string or None"
+        assert isinstance(value, str) or value is None, "JSONField value must be a string or None"
 
         value = super(JSONFormField, self).clean(value)
 

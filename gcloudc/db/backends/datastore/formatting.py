@@ -2,8 +2,6 @@ from __future__ import unicode_literals
 
 import json
 
-from django.utils import six
-
 SELECT_PATTERN = """
 SELECT (%(columns)s) FROM %(table)s
 WHERE %(where)s
@@ -70,9 +68,9 @@ def _generate_where_expression(representation):
 
 
 def _quote_string(value):
-    needs_quoting = isinstance(value, six.string_types)
+    needs_quoting = isinstance(value, str)
     # in ANSI SQL as well as GQL, string literals are wrapped in single quotes
-    return "'{}'".format(value) if needs_quoting else six.text_type(value)
+    return "'{}'".format(value) if needs_quoting else str(value)
 
 
 def _generate_select_sql(command, representation):
@@ -146,7 +144,7 @@ def _generate_update_sql(command, representation):
     sql = "\n".join(lines)
     columns = sorted([x[0].column for x in command.values])
 
-    values = {x[0].column: six.text_type(x[2]) for x in command.values}
+    values = {x[0].column: str(x[2]) for x in command.values}
 
     params = {
         "table": representation["table"],

@@ -21,7 +21,6 @@ from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.base.validation import BaseDatabaseValidation
 from django.utils import (
-    six,
     timezone,
 )
 from django.utils.encoding import smart_text
@@ -185,6 +184,9 @@ class DatabaseOperations(BaseDatabaseOperations):
         "BigIntegerField": (-MAXINT, MAXINT - 1),
         "PositiveSmallIntegerField": (0, MAXINT - 1),
         "PositiveIntegerField": (0, MAXINT - 1),
+        "SmallAutoField": (1, MAXINT - 1),
+        "AutoField": (1, MAXINT - 1),
+        "BigAutoField": (1, MAXINT - 1),
     }
 
     def bulk_batch_size(self, field, objs):
@@ -291,7 +293,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         ]
 
     def prep_lookup_key(self, model, value, field):
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             value = value[:500]
             left = value[500:]
             if left:

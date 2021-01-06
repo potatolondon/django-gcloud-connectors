@@ -19,7 +19,6 @@ from collections import OrderedDict
 
 from django.db import models
 from django.conf import settings
-from django.utils import six
 from django.core.serializers.json import DjangoJSONEncoder
 
 from gcloudc.db.backends.datastore.indexing import Indexer, register_indexer, IgnoreForIndexing
@@ -47,7 +46,7 @@ class JSONDict(dict):
         return dumps(self)
 
 
-class JSONUnicode(six.text_type):
+class JSONUnicode(str):
     """
     As above
     """
@@ -112,7 +111,7 @@ class JSONField(models.TextField):
         """Convert our string value to JSON after we load it from the DB"""
         if value is None or value == "":
             return {}
-        elif isinstance(value, six.string_types):
+        elif isinstance(value, str):
             try:
                 if self.use_ordered_dict:
                     res = loads(value, object_pairs_hook=OrderedDict)
@@ -126,7 +125,7 @@ class JSONField(models.TextField):
                 return JSONOrderedDict(res)
             elif isinstance(res, dict):
                 return JSONDict(**res)
-            elif isinstance(res, six.string_types):
+            elif isinstance(res, str):
                 return JSONUnicode(res)
             elif isinstance(res, list):
                 return JSONList(res)
@@ -226,7 +225,7 @@ class JSONKeyLookupIndexer(Indexer):
         return "exact"
 
     def prep_value_for_database(self, value, index, **kwargs):
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             value = json.loads(value)
 
         index_part = index.split("__", 1)[1]

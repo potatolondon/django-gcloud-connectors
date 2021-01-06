@@ -7,14 +7,13 @@ from django import forms
 from django.db import models
 from django.db.models.lookups import Lookup, Transform
 from django.core.exceptions import ValidationError, ImproperlyConfigured
-from django.utils import six
 from django.utils.text import capfirst
 
 from gcloudc.core.validators import MinItemsValidator, MaxItemsValidator
 from gcloudc.forms.fields import ListFormField, SetMultipleChoiceField
 
 # types that don't need to be quoted when serializing an iterable field
-_SERIALIZABLE_TYPES = six.integer_types + (float, Decimal)
+_SERIALIZABLE_TYPES = (int, float, Decimal)
 
 
 class _FakeModel(object):
@@ -213,7 +212,7 @@ class IterableField(models.Field):
 
         # If possible, parse the string into the iterable
         if not hasattr(value, "__iter__") or isinstance(value, str):
-            if isinstance(value, six.string_types):
+            if isinstance(value, str):
                 if value.startswith("[") and value.endswith("]"):
                     value = value[1:-1].strip()
 
@@ -238,7 +237,7 @@ class IterableField(models.Field):
                 )
             )
 
-        if isinstance(value, six.string_types):
+        if isinstance(value, str):
             # Catch accidentally assigning a string to a ListField
             raise ValueError("Tried to assign a string to a {}".format(self.__class__.__name__))
 
@@ -390,7 +389,7 @@ def _serialize_value(value):
     if hasattr(value, "isoformat"):
         # handle datetime, date, and time objects
         value = value.isoformat()
-    elif not isinstance(value, six.string_types):
+    elif not isinstance(value, str):
         value = str(value)
 
     return "'{0}'".format(value)

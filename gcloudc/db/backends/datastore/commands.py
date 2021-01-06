@@ -8,10 +8,9 @@ from django.db import (
     DatabaseError,
     IntegrityError,
 )
-from django.utils import six
+
 from django.utils.encoding import (
     force_str,
-    python_2_unicode_compatible,
 )
 from google.cloud.datastore.entity import Entity
 from google.cloud.datastore.key import Key
@@ -412,7 +411,7 @@ class SelectCommand(object):
                 if isinstance(value, decimal.Decimal):
                     field = get_field_from_column(self.query.model, filter_node.column)
                     value = self.connection.ops.adapt_decimalfield_value(value, field.max_digits, field.decimal_places)
-                elif isinstance(value, six.string_types):
+                elif isinstance(value, (str, bytes)):
                     value = coerce_unicode(value)
                 elif isinstance(value, Key):
                     # Make sure we apply the current namespace to any lookups
@@ -639,7 +638,6 @@ class BulkDeleteError(IntegrityError, NotSupportedError):
     pass
 
 
-@python_2_unicode_compatible
 class InsertCommand(object):
     def __init__(self, connection, model, objs, fields, raw):
         self.has_pk = any(x.primary_key for x in fields)
@@ -918,7 +916,6 @@ def _wipe_polymodel_from_entity(entity, db_table):
             entity["class"] = polymodel_value
 
 
-@python_2_unicode_compatible
 class UpdateCommand(object):
     def __init__(self, connection, query):
         self.model = query.model
