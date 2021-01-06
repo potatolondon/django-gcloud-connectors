@@ -36,7 +36,7 @@ setup(
         'Programming Language :: Python',
     ],
     install_requires=[
-        'Django>=2.0,<3.0',
+        'Django>=2.0,<3.1',
         'pyyaml>=5.3.1',
         'google-cloud-datastore>=1.15.3',
         'sleuth-mock==0.1',
