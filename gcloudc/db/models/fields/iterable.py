@@ -105,7 +105,7 @@ class IterableField(models.Field):
     def _iterable_type(self):
         raise NotImplementedError()
 
-    def from_db_value(self, value, expression, connection, context):
+    def from_db_value(self, value, expression, connection, **kwargs):
         return self.to_python(value)
 
     def db_type(self, connection):

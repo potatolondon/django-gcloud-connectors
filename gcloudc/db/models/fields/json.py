@@ -136,7 +136,7 @@ class JSONField(models.TextField):
     def to_python(self, value):
         return self.parse_json(value)
 
-    def from_db_value(self, value, expression, connection, context):
+    def from_db_value(self, value, expression, connection, **kwargs):
         return self.parse_json(value)
 
     def value_to_string(self, obj):

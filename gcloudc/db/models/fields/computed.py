@@ -73,7 +73,7 @@ class ComputedFieldMixin:
         del kwargs["editable"]
         return name, path, args, kwargs
 
-    def from_db_value(self, value, expression, connection, context):
+    def from_db_value(self, value, expression, connection, **kwargs):
         if value is None:
             return value
         return self.to_python(value)
