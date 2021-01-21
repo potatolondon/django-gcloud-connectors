@@ -4,7 +4,7 @@ from django.db.models.expressions import (
     Col,
     F,
 )
-from django.utils import six
+
 from gcloudc.db.backends.datastore.utils import get_prepared_db_value
 
 CONNECTORS = {
@@ -20,7 +20,7 @@ def evaluate_expression(expression, instance, connection):
         the get/put transaction in _update_entity so these will happen atomically
     """
 
-    if isinstance(expression, (six.string_types, int, float)):
+    if isinstance(expression, (str, int, float)):
         return expression
 
     if isinstance(expression, Aggregate):

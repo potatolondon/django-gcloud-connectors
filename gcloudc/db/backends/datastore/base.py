@@ -239,30 +239,30 @@ class DatabaseOperations(BaseDatabaseOperations):
 
         return converters
 
-    def convert_uuidfield_value(self, value, expression, connection, context):
+    def convert_uuidfield_value(self, value, expression, connection):
         if value is not None:
             value = uuid.UUID(value)
         return value
 
-    def convert_textfield_value(self, value, expression, connection, context=None):
+    def convert_textfield_value(self, value, expression, connection):
         if isinstance(value, bytes):
             # Should we log a warning here? It shouldn't have been stored as bytes
             value = value.decode("utf-8")
         return value
 
-    def convert_datetime_value(self, value, expression, connection, context=None):
+    def convert_datetime_value(self, value, expression, connection):
         return self.connection.ops.value_from_db_datetime(value)
 
-    def convert_date_value(self, value, expression, connection, context=None):
+    def convert_date_value(self, value, expression, connection):
         return self.connection.ops.value_from_db_date(value)
 
-    def convert_time_value(self, value, expression, connection, context=None):
+    def convert_time_value(self, value, expression, connection):
         return self.connection.ops.value_from_db_time(value)
 
-    def convert_decimal_value(self, value, expression, connection, context=None):
+    def convert_decimal_value(self, value, expression, connection):
         return self.connection.ops.value_from_db_decimal(value)
 
-    def convert_list_value(self, value, expression, connection, context=None):
+    def convert_list_value(self, value, expression, connection):
         if expression.output_field.db_type(connection) != "list":
             return value
 
@@ -270,7 +270,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             value = []
         return value
 
-    def convert_set_value(self, value, expression, connection, context=None):
+    def convert_set_value(self, value, expression, connection):
         if expression.output_field.db_type(connection) != "set":
             return value
 

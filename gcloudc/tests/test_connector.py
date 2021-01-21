@@ -35,7 +35,7 @@ from django.test import RequestFactory
 from django.test.utils import override_settings
 from django.urls import path
 from django.utils.safestring import SafeText
-from django.utils.six.moves import range
+
 from django.utils.timezone import make_aware
 from google.cloud.datastore import key
 from google.cloud.datastore.entity import Entity
